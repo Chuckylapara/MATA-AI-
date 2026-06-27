@@ -15,6 +15,19 @@ const MOODS: Record<string, { label: string; emoji: string; style: string; rate:
   creativo: { label: "Creativo", emoji: "🎨", style: "Habla imaginativa, juguetona y expresiva, con metáforas y un toque artístico.", rate: 1.04, pitch: 1.08 },
 };
 
+const LANG_NAMES: Record<Lang, string> = {
+  es: "español", en: "inglés", fr: "francés", it: "italiano", pt: "portugués", de: "alemán",
+};
+const LANG_OPTS: { key: "auto" | Lang; label: string }[] = [
+  { key: "auto", label: "🌐 Auto" },
+  { key: "es", label: "🇪🇸 ES" },
+  { key: "en", label: "🇬🇧 EN" },
+  { key: "fr", label: "🇫🇷 FR" },
+  { key: "it", label: "🇮🇹 IT" },
+  { key: "pt", label: "🇵🇹 PT" },
+  { key: "de", label: "🇩🇪 DE" },
+];
+
 type Turn = { role: "user" | "assistant"; text: string };
 const URL_RE = /(https?:\/\/[^\s)]+)/g;
 
@@ -55,6 +68,7 @@ export default function AvatarPage() {
   const [status, setStatus] = useState("Pulsa una vez y conversa con Mata, como en una llamada");
   const [typed, setTyped] = useState("");
   const [mood, setMood] = useState("humano");
+  const [langMode, setLangMode] = useState<"auto" | Lang>("es"); // default Spanish
 
   const recognitionRef = useRef<any>(null);
   const convoRef = useRef<{ role: string; content: string }[]>([]); // user/assistant only
@@ -65,16 +79,23 @@ export default function AvatarPage() {
   const spokenTextRef = useRef("");
   const moodRef = useRef("humano");
   const utterCountRef = useRef(0);
-  const langRef = useRef<Lang>("es"); // current conversation language (auto-detected)
+  const langRef = useRef<Lang>("es"); // effective conversation language
+  const langModeRef = useRef<"auto" | Lang>("es");
   const kickedRef = useRef(false); // ensures auto-start fires only once
 
   useEffect(() => {
     moodRef.current = mood;
   }, [mood]);
 
+  // Apply the chosen language: fixes recognition locale + voice + reply language.
   useEffect(() => {
-    langRef.current = browserLang();
-  }, []);
+    langModeRef.current = langMode;
+    langRef.current = langMode === "auto" ? browserLang() : langMode;
+    if (conversingRef.current) {
+      try { recognitionRef.current?.abort(); } catch {}
+      setTimeout(() => startListening(), 200); // restart STT in the new locale
+    }
+  }, [langMode]);
 
   // Best available voice for a given language.
   function pickVoiceFor(lang: Lang): SpeechSynthesisVoice | null {
@@ -226,13 +247,14 @@ export default function AvatarPage() {
   }
 
   function systemMessage() {
-    const parts = [BASE_PERSONA, `Estado de ánimo actual: ${MOODS[moodRef.current].style}`, memoryPrompt()];
+    const replyLang = `IMPORTANTE: responde SIEMPRE en ${LANG_NAMES[langRef.current]}, sin importar nada más.`;
+    const parts = [BASE_PERSONA, replyLang, `Estado de ánimo actual: ${MOODS[moodRef.current].style}`, memoryPrompt()];
     return { role: "system", content: parts.filter(Boolean).join(" ") };
   }
 
   async function handleUtterance(text: string) {
-    // Auto-detect the user's language → drives the reply language, voice and recognition.
-    langRef.current = detectLang(text, langRef.current);
+    // Language: respect the explicit choice; only auto-detect when mode is "auto".
+    langRef.current = langModeRef.current === "auto" ? detectLang(text, langRef.current) : langModeRef.current;
     const explicit = captureFromText(text); // explicit "recuerda que…"
     if (!explicit) autoExtractMemory(text); // background auto-memory (fire-and-forget)
     setTurns((t) => [...t, { role: "user", text }]);
@@ -283,7 +305,7 @@ export default function AvatarPage() {
     convoRef.current = [];
     convIdRef.current = null;
     spokenTextRef.current = "";
-    langRef.current = browserLang();
+    langRef.current = langModeRef.current === "auto" ? browserLang() : langModeRef.current;
     startListening();
     const greeting = GREETINGS[langRef.current];
     setTurns([{ role: "assistant", text: greeting }]);
@@ -317,6 +339,19 @@ export default function AvatarPage() {
       <p className="mb-4 text-center text-sm text-zinc-400">
         Mata te saluda al entrar y conversas por voz · te recuerda · interrúmpela cuando quieras · pídele que te busque cosas.
       </p>
+
+      {/* Language selector */}
+      <div className="mb-3 flex flex-wrap justify-center gap-2">
+        {LANG_OPTS.map((o) => (
+          <button
+            key={o.key}
+            onClick={() => setLangMode(o.key)}
+            className={`rounded-full border px-3 py-1 text-xs transition ${langMode === o.key ? "border-emerald-400 bg-emerald-400/20 text-white" : "border-white/15 text-zinc-300"}`}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
 
       {/* Emotion / talk mode selector */}
       <div className="mb-5 flex flex-wrap justify-center gap-2">
