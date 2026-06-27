@@ -55,7 +55,9 @@ class GeminiChatProvider:
     name = "gemini"
 
     async def stream(self, messages, model, temperature) -> AsyncIterator[str]:
-        from mata.common.gemini import gemini_generate
+        import json
+
+        import httpx
 
         system = "\n".join(m["content"] for m in messages if m["role"] == "system") or None
         contents = [
@@ -63,8 +65,48 @@ class GeminiChatProvider:
             for m in messages
             if m["role"] != "system"
         ]
+        body: dict = {"contents": contents, "generationConfig": {"temperature": temperature}}
+        if system:
+            body["system_instruction"] = {"parts": [{"text": system}]}
+
+        model_name = model or settings.gemini_model
+        url = (
+            f"https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{model_name}:streamGenerateContent?alt=sse"
+        )
+        headers = {"x-goog-api-key": settings.gemini_api_key}
+
+        yielded = False
+        try:
+            async with httpx.AsyncClient(timeout=120) as client:
+                async with client.stream("POST", url, headers=headers, json=body) as resp:
+                    if resp.status_code != 200:
+                        raise RuntimeError(f"stream status {resp.status_code}")
+                    async for line in resp.aiter_lines():
+                        if not line or not line.startswith("data:"):
+                            continue
+                        data = line[5:].strip()
+                        if not data or data == "[DONE]":
+                            continue
+                        try:
+                            obj = json.loads(data)
+                        except json.JSONDecodeError:
+                            continue
+                        parts = obj.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+                        for p in parts:
+                            if p.get("text"):
+                                yielded = True
+                                yield p["text"]
+            if yielded:
+                return
+        except Exception:
+            if yielded:
+                return  # partial stream already delivered; don't duplicate
+
+        # Fallback: non-streaming with model-fallback chain, emitted word by word.
+        from mata.common.gemini import gemini_generate
+
         text = await gemini_generate(contents=contents, system=system, model=model, temperature=temperature)
-        # Emit in word chunks so the UI still streams.
         for word in text.split(" "):
             yield word + " "
 
