@@ -63,6 +63,9 @@ export const api = {
   // non-streaming chat (used by the voice avatar)
   chat: (messages: any[]) =>
     request("/chat/completions", { method: "POST", body: JSON.stringify({ messages, stream: false }) }),
+  // chat memory (per-user, server-side)
+  listConversations: () => request("/chat/conversations"),
+  getConversation: (id: string) => request(`/chat/conversations/${id}`),
   // modules
   image: (body: any) => request("/image/generations", { method: "POST", body: JSON.stringify(body) }),
   code: (body: any) => request("/code/generations", { method: "POST", body: JSON.stringify(body) }),

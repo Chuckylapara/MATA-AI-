@@ -19,6 +19,7 @@ const links = [
   { href: "/avatar", label: "En vivo" },
   { href: "/chat", label: "Chat" },
   { href: "/studio", label: "Studio" },
+  { href: "/gallery", label: "Galería" },
   { href: "/billing", label: "Planes" },
   { href: "/admin", label: "Admin" },
 ];

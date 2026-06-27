@@ -1,9 +1,20 @@
 "use client";
 import { useState } from "react";
 import { api } from "@/lib/api";
+import { gallery } from "@/services/storage";
+import { downloadFile as download } from "@/services/files";
+import Thinking from "@/components/Thinking";
 
 const TABS = ["image", "video", "music", "code", "agent"] as const;
 type Tab = (typeof TABS)[number];
+
+const THINK_LABELS: Record<Tab, string> = {
+  image: "Generando imágenes…",
+  video: "Renderizando video…",
+  music: "Componiendo música…",
+  code: "Escribiendo código…",
+  agent: "El agente está trabajando…",
+};
 
 export default function StudioPage() {
   const [tab, setTab] = useState<Tab>("image");
@@ -14,25 +25,6 @@ export default function StudioPage() {
   const [error, setError] = useState("");
 
   const multi = tab === "image" || tab === "video" || tab === "music";
-
-  // Robust download: fetch the asset as a blob and save it (forces a real download,
-  // works for cross-origin URLs and data URLs). Falls back to opening in a new tab.
-  async function download(url: string, filename: string) {
-    try {
-      const res = await fetch(url);
-      const blob = await res.blob();
-      const objUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = objUrl;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(objUrl);
-    } catch {
-      window.open(url, "_blank");
-    }
-  }
 
   async function pollJob(submit: () => Promise<any>, poll: (id: string) => Promise<any>) {
     const job = await submit();
@@ -50,7 +42,10 @@ export default function StudioPage() {
     setResult(null);
     try {
       if (tab === "image") {
-        setResult(await api.image({ prompt, n: count }));
+        const r = await api.image({ prompt, n: count });
+        setResult(r);
+        // Save to the personal gallery ("Mis imágenes").
+        if (r?.images?.length) gallery.add(r.images.map((url: string) => ({ url, prompt })));
       } else if (tab === "code") {
         setResult(await api.code({ prompt, language: "python", mode: "generate" }));
       } else if (tab === "agent") {
@@ -104,8 +99,9 @@ export default function StudioPage() {
         <button className="btn" onClick={run} disabled={busy || !prompt}>
           {busy ? "Generando…" : multi ? `Generar ${count} ${tab}(s)` : `Generar ${tab}`}
         </button>
-        {multi && <p className="text-xs text-zinc-500">Cada versión es diferente para que elijas la mejor.</p>}
-        {error && <p className="text-sm text-red-400">{error}</p>}
+        {busy && <div className="pt-1"><Thinking label={THINK_LABELS[tab]} /></div>}
+        {multi && !busy && <p className="text-xs text-zinc-500">Cada versión es diferente para que elijas la mejor.</p>}
+        {error && <p className="text-sm text-red-400">⚠️ {error}</p>}
       </div>
 
       {result && (
