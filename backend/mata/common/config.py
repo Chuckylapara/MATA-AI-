@@ -1,0 +1,70 @@
+"""Centralized configuration. Loaded once, shared by every service."""
+from __future__ import annotations
+
+from functools import lru_cache
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    # --- Core ---
+    environment: str = "development"
+    log_level: str = "INFO"
+    # Dev mode: use in-memory rate-limit + job queue instead of Redis (no Docker needed).
+    dev_inmemory: bool = False
+
+    # --- Database / cache ---
+    database_url: str = "postgresql+asyncpg://mata:mata@db:5432/mata"
+    redis_url: str = "redis://redis:6379/0"
+
+    # --- Auth ---
+    jwt_secret: str = "change-me-in-production"
+    jwt_algorithm: str = "HS256"
+    access_token_ttl_minutes: int = 15
+    refresh_token_ttl_days: int = 30
+
+    # --- Seed admin ---
+    seed_admin_email: str = "admin@mata.ai"
+    seed_admin_password: str = "admin12345"
+
+    # --- Inter-service URLs (gateway uses these) ---
+    auth_service_url: str = "http://auth:8001"
+    chat_service_url: str = "http://chat:8002"
+    image_service_url: str = "http://image:8003"
+    video_service_url: str = "http://video:8004"
+    music_service_url: str = "http://music:8005"
+    code_service_url: str = "http://code:8006"
+    agent_service_url: str = "http://agent:8007"
+    billing_service_url: str = "http://billing:8008"
+    admin_service_url: str = "http://admin:8009"
+
+    # --- Provider keys (optional — mock providers used when absent) ---
+    anthropic_api_key: str | None = None
+    gemini_api_key: str | None = None
+    openai_api_key: str | None = None
+    replicate_api_token: str | None = None
+    stripe_secret_key: str | None = None
+    stripe_webhook_secret: str | None = None
+
+    # --- Default model ids ---
+    chat_model: str = "claude-opus-4-8"
+    code_model: str = "claude-opus-4-8"
+    agent_model: str = "claude-opus-4-8"
+    gemini_model: str = "gemini-2.0-flash"
+
+    # --- CORS ---
+    cors_origins: str = "http://localhost:3000"
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
+
+
+settings = get_settings()

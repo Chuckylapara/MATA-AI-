@@ -1,0 +1,27 @@
+# Render.com blueprint — deploys the Mata AI backend (all-in-one dev server).
+# Import this repo at https://render.com → New → Blueprint.
+services:
+  - type: web
+    name: mata-ai-backend
+    runtime: docker
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /healthz
+    envVars:
+      - key: SERVICE
+        value: devserver          # all services in one process
+      - key: DEV_INMEMORY
+        value: "1"                # in-memory queue/rate-limit (no Redis needed)
+      - key: DATABASE_URL
+        value: sqlite+aiosqlite:////tmp/mata.db   # ephemeral; see notes for Postgres
+      - key: JWT_SECRET
+        generateValue: true        # Render generates a strong secret
+      - key: ACCESS_TOKEN_TTL_MINUTES
+        value: "120"
+      - key: GEMINI_API_KEY
+        sync: false                # set this in the Render dashboard (secret)
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash-lite
+      - key: CORS_ORIGINS
+        sync: false                # set to your Vercel URL after deploying frontend

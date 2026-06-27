@@ -1,0 +1,102 @@
+name: mata-ai
+
+x-backend: &backend
+  build: ./backend
+  env_file: .env
+  depends_on:
+    db:
+      condition: service_healthy
+    redis:
+      condition: service_started
+  restart: unless-stopped
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: mata
+      POSTGRES_PASSWORD: mata
+      POSTGRES_DB: mata
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mata"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  gateway:
+    <<: *backend
+    environment:
+      SERVICE: gateway
+      PORT: 8000
+    ports:
+      - "8000:8000"
+
+  auth:
+    <<: *backend
+    environment: { SERVICE: auth, PORT: 8001 }
+
+  chat:
+    <<: *backend
+    environment: { SERVICE: chat, PORT: 8002 }
+
+  image:
+    <<: *backend
+    environment: { SERVICE: image, PORT: 8003 }
+
+  video:
+    <<: *backend
+    environment: { SERVICE: video, PORT: 8004 }
+
+  music:
+    <<: *backend
+    environment: { SERVICE: music, PORT: 8005 }
+
+  code:
+    <<: *backend
+    environment: { SERVICE: code, PORT: 8006 }
+
+  agent:
+    <<: *backend
+    environment: { SERVICE: agent, PORT: 8007 }
+
+  billing:
+    <<: *backend
+    environment: { SERVICE: billing, PORT: 8008 }
+
+  admin:
+    <<: *backend
+    environment: { SERVICE: admin, PORT: 8009 }
+
+  # --- Async generation workers ---
+  video-worker:
+    <<: *backend
+    command: ["python", "-m", "mata.worker"]
+    environment: { SERVICE: video, ROLE: worker }
+
+  music-worker:
+    <<: *backend
+    command: ["python", "-m", "mata.worker"]
+    environment: { SERVICE: music, ROLE: worker }
+
+  frontend:
+    build: ./frontend
+    env_file: .env
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - gateway
+    restart: unless-stopped
+
+volumes:
+  pgdata:
