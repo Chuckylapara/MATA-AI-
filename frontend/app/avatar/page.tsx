@@ -24,6 +24,30 @@ const MALE_HINTS =
   /(pablo|jorge|alvaro|álvaro|raul|raúl|diego|enrique|miguel|carlos|juan|andres|andrés|jose|josé|fernando|gonzalo|david|mark|guy|christopher|eric|brandon|liam|james|paul|thomas|henri|nicolas|matteo|giorgio|bruno|joao|joão|jens|hans|stefan|conrad|male|hombre|masculino|\bman\b)/i;
 const FEMALE_HINTS =
   /(sabina|helena|laura|elena|paulina|monica|mónica|dalia|lucia|lucía|maria|maría|samantha|zira|aria|jenny|female|mujer|woman|google)/i;
+
+// Cloud TTS via Google Translate — real native pronunciation, works on any device.
+// One neutral voice per language (no gender choice). For a male voice use device voices in Edge.
+function cloudTtsUrl(lang: Lang, text: string): string {
+  return `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${lang}&q=${encodeURIComponent(text.slice(0, 200))}`;
+}
+
+// Split text into <=200-char chunks at word boundaries (Google TTS limit).
+function chunkText(text: string, max = 200): string[] {
+  if (text.length <= max) return [text];
+  const words = text.split(" ");
+  const out: string[] = [];
+  let cur = "";
+  for (const w of words) {
+    if ((cur + " " + w).trim().length > max) {
+      if (cur) out.push(cur.trim());
+      cur = w;
+    } else {
+      cur = (cur + " " + w).trim();
+    }
+  }
+  if (cur) out.push(cur.trim());
+  return out;
+}
 const LANG_OPTS: { key: "auto" | Lang; label: string }[] = [
   { key: "auto", label: "🌐 Auto" },
   { key: "es", label: "🇪🇸 ES" },
@@ -78,6 +102,8 @@ export default function AvatarPage() {
   const [gender, setGender] = useState<"male" | "female">("male"); // default male voice
   const [voiceURI, setVoiceURI] = useState<string>("");
   const [voicesState, setVoicesState] = useState<SpeechSynthesisVoice[]>([]);
+  const [engine, setEngine] = useState<"cloud" | "device">("cloud"); // cloud = real neural voices
+  const [cloudVoice, setCloudVoice] = useState<string>("");
 
   const recognitionRef = useRef<any>(null);
   const convoRef = useRef<{ role: string; content: string }[]>([]); // user/assistant only
@@ -91,8 +117,21 @@ export default function AvatarPage() {
   const langRef = useRef<Lang>("es"); // effective conversation language
   const langModeRef = useRef<"auto" | Lang>("es");
   const genderRef = useRef<"male" | "female">("male");
-  const manualVoiceRef = useRef<string>(""); // user-picked voiceURI
+  const manualVoiceRef = useRef<string>(""); // user-picked device voiceURI
+  const engineRef = useRef<"cloud" | "device">("cloud");
+  const cloudVoiceRef = useRef<string>("");
+  const audioElRef = useRef<HTMLAudioElement | null>(null);
+  const audioQueueRef = useRef<string[]>([]);
   const kickedRef = useRef(false); // ensures auto-start fires only once
+
+  useEffect(() => {
+    engineRef.current = engine;
+    if (typeof window !== "undefined") localStorage.setItem("mata_voice_engine", engine);
+  }, [engine]);
+  useEffect(() => {
+    cloudVoiceRef.current = cloudVoice;
+    if (typeof window !== "undefined") localStorage.setItem("mata_cloud_voice", cloudVoice);
+  }, [cloudVoice]);
 
   useEffect(() => {
     genderRef.current = gender;
@@ -111,7 +150,12 @@ export default function AvatarPage() {
     if (g === "male" || g === "female") setGender(g);
     const v = localStorage.getItem("mata_voice_uri");
     if (v) setVoiceURI(v);
+    const e = localStorage.getItem("mata_voice_engine");
+    if (e === "cloud" || e === "device") setEngine(e);
+    const cv = localStorage.getItem("mata_cloud_voice");
+    if (cv) setCloudVoice(cv);
   }, []);
+
 
   useEffect(() => {
     moodRef.current = mood;
@@ -157,12 +201,8 @@ export default function AvatarPage() {
       pt: "Olá, eu sou a Mata. É assim que soa minha voz.",
       de: "Hallo, ich bin Mata. So klingt meine Stimme.",
     };
-    window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(samples[lang]);
-    const v = pickVoiceFor(lang);
-    if (v) u.voice = v;
-    u.lang = speechLocale(lang);
-    window.speechSynthesis.speak(u);
+    stopSpeaking();
+    enqueueSpeak(samples[lang]);
   }
 
   useEffect(() => {
@@ -269,38 +309,83 @@ export default function AvatarPage() {
 
   function stopSpeaking() {
     window.speechSynthesis.cancel();
+    audioQueueRef.current = [];
+    if (audioElRef.current) {
+      audioElRef.current.onended = null;
+      audioElRef.current.pause();
+      audioElRef.current = null;
+    }
     utterCountRef.current = 0;
     setSpeaking(false);
     speakingRef.current = false;
   }
 
-  // Queue a sentence to be spoken (browser plays them in order) with the mood's voice.
-  function enqueueSpeak(sentence: string) {
-    const clean = stripForSpeech(sentence);
-    if (!clean) return;
-    spokenTextRef.current += " " + clean.toLowerCase();
+  function onSpeakStart() {
+    setSpeaking(true);
+    speakingRef.current = true;
+    setStatus("Mata está hablando… (interrúmpela cuando quieras)");
+  }
+  function onSpeakIdle() {
+    setSpeaking(false);
+    speakingRef.current = false;
+    setStatus("Te escucho…");
+  }
+
+  // Speak one sentence on the device (browser TTS) — used directly or as cloud fallback.
+  function deviceSpeak(text: string, onDone?: () => void) {
     const m = MOODS[moodRef.current];
-    const u = new SpeechSynthesisUtterance(clean);
+    const u = new SpeechSynthesisUtterance(text);
     const v = pickVoiceFor(langRef.current);
     if (v) u.voice = v;
     u.lang = speechLocale(langRef.current);
     u.rate = m.rate;
     u.pitch = m.pitch;
-    u.onstart = () => {
-      setSpeaking(true);
-      speakingRef.current = true;
-      setStatus("Mata está hablando… (interrúmpela cuando quieras)");
-    };
+    u.onstart = onSpeakStart;
     u.onend = () => {
       utterCountRef.current = Math.max(0, utterCountRef.current - 1);
-      if (utterCountRef.current === 0) {
-        setSpeaking(false);
-        speakingRef.current = false;
-        setStatus("Te escucho…");
-      }
+      if (utterCountRef.current === 0) onSpeakIdle();
+      onDone?.();
     };
     utterCountRef.current += 1;
-    window.speechSynthesis.speak(u); // queues after current
+    window.speechSynthesis.speak(u);
+  }
+
+  // Play the cloud (neural) audio queue sentence by sentence.
+  function playNextCloud() {
+    const text = audioQueueRef.current.shift();
+    if (!text) {
+      onSpeakIdle();
+      return;
+    }
+    const url = cloudTtsUrl(langRef.current, text);
+    const audio = new Audio(url);
+    audioElRef.current = audio;
+    onSpeakStart();
+    audio.onended = () => {
+      audioElRef.current = null;
+      playNextCloud();
+    };
+    audio.onerror = () => {
+      audioElRef.current = null;
+      deviceSpeak(text, () => playNextCloud()); // fallback to device voice
+    };
+    audio.play().catch(() => {
+      audioElRef.current = null;
+      deviceSpeak(text, () => playNextCloud());
+    });
+  }
+
+  // Queue a sentence to be spoken (cloud neural voice by default; device as fallback).
+  function enqueueSpeak(sentence: string) {
+    const clean = stripForSpeech(sentence);
+    if (!clean) return;
+    spokenTextRef.current += " " + clean.toLowerCase();
+    if (engineRef.current === "cloud") {
+      for (const part of chunkText(clean)) audioQueueRef.current.push(part);
+      if (!audioElRef.current) playNextCloud();
+    } else {
+      deviceSpeak(clean);
+    }
   }
 
   function systemMessage() {
@@ -412,41 +497,65 @@ export default function AvatarPage() {
         ))}
       </div>
 
-      {/* Gender + voice selector */}
-      <div className="mb-3 flex flex-wrap items-center justify-center gap-2">
+      {/* Voice engine toggle */}
+      <div className="mb-2 flex flex-wrap items-center justify-center gap-2">
         <button
-          onClick={() => setGender("male")}
-          className={`rounded-full border px-3 py-1 text-xs transition ${gender === "male" ? "border-cyan-400 bg-cyan-400/20 text-white" : "border-white/15 text-zinc-300"}`}
+          onClick={() => setEngine("cloud")}
+          className={`rounded-full border px-3 py-1 text-xs transition ${engine === "cloud" ? "border-emerald-400 bg-emerald-400/20 text-white" : "border-white/15 text-zinc-300"}`}
         >
-          👨 Hombre
+          🌟 Voz natural (nube)
         </button>
         <button
-          onClick={() => setGender("female")}
-          className={`rounded-full border px-3 py-1 text-xs transition ${gender === "female" ? "border-cyan-400 bg-cyan-400/20 text-white" : "border-white/15 text-zinc-300"}`}
+          onClick={() => setEngine("device")}
+          className={`rounded-full border px-3 py-1 text-xs transition ${engine === "device" ? "border-emerald-400 bg-emerald-400/20 text-white" : "border-white/15 text-zinc-300"}`}
         >
-          👩 Mujer
-        </button>
-        <select
-          value={voiceURI}
-          onChange={(e) => setVoiceURI(e.target.value)}
-          className="rounded-lg border border-white/15 bg-black/40 px-2 py-1 text-xs text-white outline-none"
-          title="Elige la voz exacta"
-        >
-          <option value="">Voz automática ({gender === "male" ? "hombre" : "mujer"})</option>
-          {voicesForLang.map((v) => (
-            <option key={v.voiceURI} value={v.voiceURI}>
-              {v.name}
-            </option>
-          ))}
-        </select>
-        <button onClick={previewVoice} className="rounded-full border border-white/15 px-3 py-1 text-xs text-zinc-200 hover:bg-white/10">
-          🔊 Probar
+          💻 Voz del dispositivo
         </button>
       </div>
-      {voicesForLang.length === 0 && (
+
+      {/* Voice selector */}
+      <div className="mb-2 flex flex-wrap items-center justify-center gap-2">
+        {engine === "device" && (
+          <>
+            <button
+              onClick={() => setGender("male")}
+              className={`rounded-full border px-3 py-1 text-xs transition ${gender === "male" ? "border-cyan-400 bg-cyan-400/20 text-white" : "border-white/15 text-zinc-300"}`}
+            >
+              👨 Hombre
+            </button>
+            <button
+              onClick={() => setGender("female")}
+              className={`rounded-full border px-3 py-1 text-xs transition ${gender === "female" ? "border-cyan-400 bg-cyan-400/20 text-white" : "border-white/15 text-zinc-300"}`}
+            >
+              👩 Mujer
+            </button>
+            <select
+              value={voiceURI}
+              onChange={(e) => setVoiceURI(e.target.value)}
+              className="rounded-lg border border-white/15 bg-black/40 px-2 py-1 text-xs text-white outline-none"
+              title="Elige la voz exacta"
+            >
+              <option value="">Voz automática ({gender === "male" ? "hombre" : "mujer"})</option>
+              {voicesForLang.map((v) => (
+                <option key={v.voiceURI} value={v.voiceURI}>
+                  {v.name}
+                </option>
+              ))}
+            </select>
+          </>
+        )}
+        <button onClick={previewVoice} className="rounded-full border border-white/15 px-3 py-1 text-xs text-zinc-200 hover:bg-white/10">
+          🔊 Probar voz
+        </button>
+      </div>
+      {engine === "cloud" && (
+        <p className="mb-3 max-w-md text-center text-xs text-emerald-400/80">
+          🌟 Voz neural en la nube — <b>{LANG_NAMES[effLang]} real</b>, funciona en cualquier dispositivo. (Voz neutral; para voz de <b>hombre</b> usa “💻 Voz del dispositivo” en Microsoft Edge.)
+        </p>
+      )}
+      {engine === "device" && voicesForLang.length === 0 && (
         <p className="mb-3 max-w-md text-center text-xs text-amber-400">
-          ⚠️ Tu dispositivo no tiene voces en {LANG_NAMES[effLang]} (por eso suena con acento extranjero).
-          Instálalas en <b>Configuración de Windows → Hora e idioma → Voz</b>, o usa <b>Microsoft Edge</b> (trae voces naturales en línea).
+          ⚠️ Tu dispositivo no tiene voces en {LANG_NAMES[effLang]}. Cambia a <b>🌟 Voz natural (nube)</b>, o abre el sitio en <b>Microsoft Edge</b> y elige una voz “(Natural)”.
         </p>
       )}
 
