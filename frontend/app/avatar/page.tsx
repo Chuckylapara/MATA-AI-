@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { streamChat } from "@/lib/api";
+import { streamChat, getToken } from "@/lib/api";
 import { MATA_PERSONA, SEARCH_RULE } from "@/services/persona";
 import { browserLang, detectLang, GREETINGS, Lang, speechLocale } from "@/services/lang";
 import { autoExtractMemory, captureFromText, memoryPrompt, slidingWindow } from "@/services/memory";
@@ -63,7 +63,6 @@ export default function AvatarPage() {
   const [speaking, setSpeaking] = useState(false);
   const [thinking, setThinking] = useState(false);
   const [surprised, setSurprised] = useState(false);
-  const [status, setStatus] = useState("Entra y habla con Mata");
   const [mood, setMood] = useState("humano");
   const [langMode, setLangMode] = useState<"auto" | Lang>("es");
   const [gender, setGender] = useState<"male" | "female">("male");
@@ -71,6 +70,7 @@ export default function AvatarPage() {
   const [voicesState, setVoicesState] = useState<SpeechSynthesisVoice[]>([]);
   const [engine, setEngine] = useState<"cloud" | "device">("cloud");
   const [showSettings, setShowSettings] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const recognitionRef = useRef<any>(null);
   const convoRef = useRef<{ role: string; content: string }[]>([]);
@@ -89,7 +89,6 @@ export default function AvatarPage() {
   const audioElRef = useRef<HTMLAudioElement | null>(null);
   const audioQueueRef = useRef<string[]>([]);
   const kickedRef = useRef(false);
-  const recentRepliesRef = useRef<string[]>([]); // anti-repetition: last 5 bot replies
   const lastSpeakEndRef = useRef(0);
 
   useEffect(() => { moodRef.current = mood; }, [mood]);
@@ -132,19 +131,17 @@ export default function AvatarPage() {
       for (let i = e.resultIndex; i < e.results.length; i++) if (e.results[i].isFinal) finalText += e.results[i][0].transcript;
       const phrase = finalText.trim();
       if (!phrase || phrase.length < 2) return;
-      // Echo guard: ignore the mic catching Mata's own voice — while speaking, and for a
-      // short window right after she finishes (trailing echo that caused repeated replies).
       const overlap = wordOverlap(spokenTextRef.current, phrase);
       if (speakingRef.current && overlap > 0.45) return;
       if (!speakingRef.current && Date.now() - lastSpeakEndRef.current < 1200 && overlap > 0.6) return;
-      if (speakingRef.current) stopSpeaking(); // real interruption (barge-in)
+      if (speakingRef.current) stopSpeaking();
       setSurprised(true);
       setTimeout(() => setSurprised(false), 500);
       handleUtterance(phrase);
     };
     rec.onend = () => { setListening(false); if (conversingRef.current) setTimeout(() => startListening(), 300); };
     rec.onerror = (ev: any) => {
-      if (ev.error === "not-allowed" || ev.error === "service-not-allowed") { setStatus("Activa el micrófono y recarga."); stopConversation(); }
+      if (ev.error === "not-allowed" || ev.error === "service-not-allowed") { stopConversation(); }
     };
     recognitionRef.current = rec;
     const loadVoices = () => { const vs = window.speechSynthesis.getVoices(); voicesRef.current = vs; setVoicesState(vs); };
@@ -153,14 +150,12 @@ export default function AvatarPage() {
     return () => { conversingRef.current = false; try { rec.abort(); } catch {} window.speechSynthesis.cancel(); };
   }, []);
 
-  // Auto-start on entry (browsers may require a first gesture).
   useEffect(() => {
     if (!supported) return;
     const kick = () => { if (kickedRef.current) return; kickedRef.current = true; cleanup(); startConversation(); };
-    const onG = () => kick();
-    const cleanup = () => { window.removeEventListener("pointerdown", onG); window.removeEventListener("keydown", onG); };
-    window.addEventListener("pointerdown", onG);
-    window.addEventListener("keydown", onG);
+    const cleanup = () => { window.removeEventListener("pointerdown", kick); window.removeEventListener("keydown", kick); };
+    window.addEventListener("pointerdown", kick);
+    window.addEventListener("keydown", kick);
     const ua: any = typeof navigator !== "undefined" ? (navigator as any).userActivation : null;
     const t = setTimeout(() => { if (!ua || ua.hasBeenActive) kick(); }, 350);
     return () => { clearTimeout(t); cleanup(); };
@@ -178,8 +173,8 @@ export default function AvatarPage() {
     utterCountRef.current = 0;
     setSpeaking(false); speakingRef.current = false; lastSpeakEndRef.current = Date.now();
   }
-  function onSpeakStart() { setSpeaking(true); speakingRef.current = true; setStatus("Hablando…"); }
-  function onSpeakIdle() { setSpeaking(false); speakingRef.current = false; lastSpeakEndRef.current = Date.now(); setStatus("Te escucho…"); }
+  function onSpeakStart() { setSpeaking(true); speakingRef.current = true; }
+  function onSpeakIdle() { setSpeaking(false); speakingRef.current = false; lastSpeakEndRef.current = Date.now(); }
 
   function deviceSpeak(text: string, onDone?: () => void) {
     const m = MOODS[moodRef.current];
@@ -198,9 +193,12 @@ export default function AvatarPage() {
     const audio = new Audio(cloudTtsUrl(langRef.current, text));
     audioElRef.current = audio;
     onSpeakStart();
-    audio.onended = () => { audioElRef.current = null; playNextCloud(); };
-    audio.onerror = () => { audioElRef.current = null; deviceSpeak(text, () => playNextCloud()); };
-    audio.play().catch(() => { audioElRef.current = null; deviceSpeak(text, () => playNextCloud()); });
+    let done = false;
+    const finish = () => { if (done) return; done = true; audioElRef.current = null; playNextCloud(); };
+    const fallback = () => { if (done) return; done = true; audioElRef.current = null; deviceSpeak(text, () => playNextCloud()); };
+    audio.onended = finish;
+    audio.onerror = fallback;
+    audio.play().catch(fallback);
   }
   function enqueueSpeak(sentence: string) {
     const clean = stripForSpeech(sentence);
@@ -210,7 +208,7 @@ export default function AvatarPage() {
     else deviceSpeak(clean);
   }
 
-  function systemMessage() {
+  function systemMsg() {
     const replyLang = `IMPORTANTE: responde SIEMPRE en ${LANG_NAMES[langRef.current]}.`;
     return { role: "system", content: [BASE_PERSONA, ANTI_REPEAT, replyLang, `Tono: ${MOODS[moodRef.current].style}`, memoryPrompt()].filter(Boolean).join(" ") };
   }
@@ -221,44 +219,54 @@ export default function AvatarPage() {
     if (!explicit) autoExtractMemory(text);
     convoRef.current.push({ role: "user", content: text });
     setThinking(true);
-    setStatus("Pensando…");
     stopSpeaking();
     spokenTextRef.current = "";
     let full = "";
     let pending = "";
+    let thinkingCleared = false;
     try {
-      const messages = [systemMessage(), ...slidingWindow(convoRef.current, 24)];
+      const messages = [systemMsg(), ...slidingWindow(convoRef.current, 24)];
       convIdRef.current = await streamChat(messages, convIdRef.current, (delta) => {
-        if (thinking) setThinking(false);
+        if (!thinkingCleared) { thinkingCleared = true; setThinking(false); }
         full += delta; pending += delta;
         let mm: RegExpMatchArray | null;
         while ((mm = pending.match(/(.+?[.!?…\n])(\s|$)/s))) { enqueueSpeak(mm[1]); pending = pending.slice((mm.index ?? 0) + mm[0].length); }
       });
       if (pending.trim()) enqueueSpeak(pending);
-      // Anti-repetition memory (track last 5 replies).
-      recentRepliesRef.current = [norm(full), ...recentRepliesRef.current].slice(0, 5);
       convoRef.current.push({ role: "assistant", content: full });
+      setError(null);
     } catch (err: any) {
-      setStatus(`Error: ${err.message}`);
+      console.error(err);
+      const msg = err?.message || "";
+      if (msg.includes("401") || msg.includes("403")) {
+        setError("Sesión expirada. Por favor inicia sesión de nuevo.");
+        stopConversation();
+      } else if (msg.includes("Failed to fetch") || msg.includes("NetworkError")) {
+        setError("Sin conexión al servidor. Verifica tu internet.");
+      } else {
+        setError(`Error al responder: ${msg}`);
+      }
     } finally {
       setThinking(false);
     }
   }
 
   function startConversation() {
+    if (!getToken()) {
+      setError("Necesitas iniciar sesión para hablar con Mata. Toca 'Cuenta' arriba.");
+      return;
+    }
+    setError(null);
     window.speechSynthesis.cancel();
     conversingRef.current = true;
     setConversing(true);
     convoRef.current = [];
     convIdRef.current = null;
-    recentRepliesRef.current = [];
     spokenTextRef.current = "";
     langRef.current = langModeRef.current === "auto" ? browserLang() : langModeRef.current;
     startListening();
     const greeting = GREETINGS[langRef.current];
-    // Record the greeting in history so the model knows it already introduced itself.
     convoRef.current.push({ role: "assistant", content: greeting });
-    recentRepliesRef.current = [norm(greeting)];
     enqueueSpeak(greeting);
   }
   function stopConversation() {
@@ -266,7 +274,6 @@ export default function AvatarPage() {
     setConversing(false); setListening(false); setThinking(false);
     stopSpeaking();
     try { recognitionRef.current?.abort(); } catch {}
-    setStatus("Conversación pausada");
   }
 
   const face = surprised ? "surprised" : speaking ? "speaking" : thinking ? "thinking" : listening ? "listening" : "idle";
@@ -277,7 +284,19 @@ export default function AvatarPage() {
     <div className="avatar-page">
       <style>{faceCss}</style>
 
-      {/* Full-screen human avatar — no text inside */}
+      {error && (
+        <div className="error-banner">
+          ⚠️ {error}
+          <button onClick={() => setError(null)} className="error-close">✕</button>
+        </div>
+      )}
+
+      {!supported && (
+        <div className="error-banner">
+          ⚠️ Tu navegador no soporta reconocimiento de voz. Prueba con Chrome en escritorio.
+        </div>
+      )}
+
       <div className={`stage ${face} mood-${mood}`}>
         <div className="aura" />
         <div className="head">
@@ -296,26 +315,22 @@ export default function AvatarPage() {
         </div>
       </div>
 
-      {/* Controls — OUTSIDE the avatar */}
       <div className="controls">
         {conversing ? (
           <button onClick={stopConversation} className="btn !bg-red-600">■ Terminar</button>
         ) : (
           <button onClick={startConversation} disabled={!supported} className="btn">🎤 Hablar</button>
         )}
-
         <div className="seg">
           {LANG_OPTS.map((o) => (
             <button key={o.key} onClick={() => setLangMode(o.key)} className={`seg-btn ${langMode === o.key ? "on" : ""}`}>{o.label}</button>
           ))}
         </div>
-
         <div className="seg">
           {Object.entries(MOODS).map(([k, m]) => (
             <button key={k} onClick={() => setMood(k)} className={`seg-btn ${mood === k ? "on" : ""}`} title={m.label}>{m.emoji}</button>
           ))}
         </div>
-
         <button onClick={() => setShowSettings((s) => !s)} className="seg-btn">⚙️</button>
       </div>
 
@@ -335,7 +350,7 @@ export default function AvatarPage() {
               </select>
             </div>
           )}
-          <p className="hint">💡 Usa audífonos para interrumpirla sin eco. {engine === "cloud" ? "Voz neural en la nube (español real)." : ""}</p>
+          <p className="hint">💡 Usa audífonos para interrumpirla sin eco.</p>
         </div>
       )}
     </div>
@@ -353,8 +368,6 @@ const faceCss = `
 .stage.speaking .aura { background: radial-gradient(circle, rgba(16,185,129,.55), transparent 70%); opacity:.8; }
 .stage.thinking .aura { background: radial-gradient(circle, rgba(234,179,8,.5), transparent 70%); }
 .stage.listening .aura { background: radial-gradient(circle, rgba(168,85,247,.55), transparent 70%); }
-
-/* Head */
 .head { position:relative; width:230px; height:300px; animation: float 6s ease-in-out infinite; }
 .stage.listening .head { animation: float 6s ease-in-out infinite, tilt 4s ease-in-out infinite; }
 @keyframes float { 0%,100%{ transform:translateY(0);} 50%{ transform:translateY(-10px);} }
@@ -363,16 +376,12 @@ const faceCss = `
   background: linear-gradient(160deg,#3b2f63,#241b40); box-shadow:0 0 30px rgba(124,58,237,.4); }
 .face { position:absolute; top:40px; left:50%; transform:translateX(-50%); width:188px; height:236px; border-radius:46% 46% 48% 48%;
   background: linear-gradient(160deg,#f1d6c0,#e3b89c); box-shadow: inset -14px -16px 30px rgba(0,0,0,.18), inset 10px 8px 24px rgba(255,255,255,.35), 0 0 30px rgba(34,211,238,.18); }
-
-/* Brows */
 .brow { position:absolute; top:78px; width:46px; height:7px; border-radius:6px; background:#5b4636; transition: transform .25s; }
 .brow-l { left:30px; } .brow-r { right:30px; }
 .stage.thinking .brow-l { transform: translateY(-6px) rotate(-12deg); }
 .stage.thinking .brow-r { transform: translateY(-3px) rotate(6deg); }
 .stage.surprised .brow { transform: translateY(-10px); }
 .mood-feliz .brow { transform: translateY(-2px) rotate(0deg); }
-
-/* Eyes */
 .eye { position:absolute; top:92px; width:46px; height:30px; border-radius:50%; background:#fff; overflow:hidden;
   box-shadow: inset 0 2px 4px rgba(0,0,0,.2); }
 .eye-l { left:28px; } .eye-r { right:28px; }
@@ -384,12 +393,8 @@ const faceCss = `
 .stage.idle .lid { animation: blink 4s infinite; }
 .stage.speaking .lid { animation: blink 5.5s infinite; }
 @keyframes blink { 0%,94%,100%{ transform:scaleY(0);} 97%{ transform:scaleY(1);} }
-
-/* Nose */
 .nose { position:absolute; top:120px; left:50%; transform:translateX(-50%); width:16px; height:40px; border-radius:0 0 10px 10px;
   background: linear-gradient(90deg, rgba(0,0,0,.06), rgba(0,0,0,.14)); }
-
-/* Mouth + lip sync */
 .mouth { position:absolute; bottom:36px; left:50%; transform:translateX(-50%); width:78px; height:18px; display:flex; align-items:center; justify-content:center; }
 .lips { width:100%; height:10px; border-radius:0 0 40px 40px; background:#b6584f; box-shadow: inset 0 -3px 4px rgba(0,0,0,.25);
   transition: height .08s, border-radius .2s, width .2s; }
@@ -399,11 +404,8 @@ const faceCss = `
 .stage.surprised .lips { width:34px; height:30px; border-radius:50%; }
 .stage.speaking .lips { animation: talk .26s ease-in-out infinite; }
 @keyframes talk { 0%{ height:6px;} 35%{ height:26px;} 70%{ height:12px;} 100%{ height:22px;} }
-
 .status-pill { position:absolute; bottom:14px; left:50%; transform:translateX(-50%); font-size:12px; color:#a5f3fc;
   background:rgba(0,0,0,.4); border:1px solid rgba(34,211,238,.3); padding:4px 12px; border-radius:999px; backdrop-filter:blur(6px); }
-
-/* Controls outside avatar */
 .controls { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:10px; }
 .seg { display:flex; gap:4px; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1); border-radius:999px; padding:3px; }
 .seg-btn { padding:5px 10px; border-radius:999px; font-size:13px; color:#cbd5e1; transition:.2s; }
@@ -412,4 +414,7 @@ const faceCss = `
 .settings { display:flex; flex-direction:column; align-items:center; gap:10px; }
 .vsel { background:rgba(0,0,0,.5); border:1px solid rgba(255,255,255,.15); color:#fff; border-radius:8px; padding:4px 8px; font-size:12px; }
 .hint { font-size:11px; color:#94a3b8; text-align:center; max-width:420px; }
+.error-banner { display:flex; align-items:center; gap:8px; background:rgba(239,68,68,.15); border:1px solid rgba(239,68,68,.4);
+  color:#fca5a5; padding:10px 16px; border-radius:12px; font-size:13px; max-width:640px; width:100%; }
+.error-close { margin-left:auto; background:none; border:none; color:#fca5a5; font-size:16px; cursor:pointer; padding:0 4px; }
 `;

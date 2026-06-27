@@ -31,4 +31,5 @@ services:
       - key: GEMINI_MODEL
         value: gemini-2.5-flash-lite
       - key: CORS_ORIGINS
-        sync: false                # your Vercel/Firebase URL
+        value: "https://mata-ai-236ad.web.app,https://mata-ai-backend.onrender.com"
+        # Add more origins if needed (Vercel preview URLs, custom domain, etc.)

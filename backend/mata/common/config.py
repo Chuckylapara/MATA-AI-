@@ -52,7 +52,7 @@ class Settings(BaseSettings):
     chat_model: str = "claude-opus-4-8"
     code_model: str = "claude-opus-4-8"
     agent_model: str = "claude-opus-4-8"
-    gemini_model: str = "gemini-2.0-flash"
+    gemini_model: str = "gemini-2.5-flash"
 
     # --- CORS ---
     cors_origins: str = "http://localhost:3000"

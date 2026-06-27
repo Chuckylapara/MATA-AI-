@@ -1,4 +1,4 @@
-"""Image provider adapters. OpenAI (DALL·E) or Replicate when keyed, else SVG mock."""
+"""Image provider adapters. Gemini (Imagen 4) > OpenAI (DALL·E) > Pollinations (free) > SVG mock."""
 from __future__ import annotations
 
 import base64
@@ -9,7 +9,6 @@ from mata.common.config import settings
 
 
 def _mock_image(prompt: str, size: str) -> str:
-    """Deterministic placeholder: an SVG data-URL seeded from the prompt."""
     h = hashlib.sha256(prompt.encode()).hexdigest()
     c1, c2 = f"#{h[0:6]}", f"#{h[6:12]}"
     w, _, ht = size.partition("x")
@@ -28,6 +27,48 @@ class MockImageProvider:
 
     async def generate(self, prompt: str, size: str, n: int, style: str | None) -> list[str]:
         return [_mock_image(f"{prompt}#{i}", size) for i in range(n)]
+
+
+class GeminiImageProvider:
+    """Imagen 4 via Google AI Studio API key."""
+    name = "gemini-imagen4"
+
+    def _aspect_ratio(self, size: str) -> str:
+        w, _, h = size.partition("x")
+        try:
+            ratio = int(w) / int(h or w)
+        except (ValueError, ZeroDivisionError):
+            return "1:1"
+        if ratio > 1.6:
+            return "16:9"
+        if ratio < 0.65:
+            return "9:16"
+        return "1:1"
+
+    async def generate(self, prompt: str, size: str, n: int, style: str | None) -> list[str]:
+        import httpx
+
+        full_prompt = f"{prompt}. Style: {style}" if style else prompt
+        aspect = self._aspect_ratio(size)
+        url = (
+            "https://generativelanguage.googleapis.com/v1beta/models"
+            f"/imagen-4.0-generate-001:predict?key={settings.gemini_api_key}"
+        )
+        async with httpx.AsyncClient(timeout=120) as client:
+            resp = await client.post(
+                url,
+                json={
+                    "instances": [{"prompt": full_prompt}],
+                    "parameters": {"sampleCount": n, "aspectRatio": aspect},
+                },
+            )
+            resp.raise_for_status()
+            predictions = resp.json().get("predictions", [])
+            return [
+                f"data:image/png;base64,{p['bytesBase64Encoded']}"
+                for p in predictions
+                if "bytesBase64Encoded" in p
+            ]
 
 
 class OpenAIImageProvider:
@@ -50,7 +91,6 @@ class OpenAIImageProvider:
 
 class PollinationsImageProvider:
     """Free text-to-image generation (no API key). Returns on-demand image URLs."""
-
     name = "pollinations"
 
     async def generate(self, prompt: str, size: str, n: int, style: str | None) -> list[str]:
@@ -59,7 +99,6 @@ class PollinationsImageProvider:
         height = height or "1024"
         full_prompt = f"{prompt}, {style}" if style else prompt
         encoded = urllib.parse.quote(full_prompt)
-        # Different seed per image so a batch returns distinct results.
         return [
             f"https://image.pollinations.ai/prompt/{encoded}"
             f"?width={width}&height={height}&seed={i + 1}&nologo=true"
@@ -68,7 +107,8 @@ class PollinationsImageProvider:
 
 
 def get_image_provider():
+    if settings.gemini_api_key:
+        return GeminiImageProvider()
     if settings.openai_api_key:
         return OpenAIImageProvider()
-    # Free, keyless real image generation (default).
     return PollinationsImageProvider()
