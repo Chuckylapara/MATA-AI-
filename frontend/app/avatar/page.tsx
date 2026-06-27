@@ -18,6 +18,12 @@ const MOODS: Record<string, { label: string; emoji: string; style: string; rate:
 const LANG_NAMES: Record<Lang, string> = {
   es: "español", en: "inglés", fr: "francés", it: "italiano", pt: "portugués", de: "alemán",
 };
+
+// Heuristics to guess voice gender by name (the Web Speech API doesn't expose it).
+const MALE_HINTS =
+  /(pablo|jorge|alvaro|álvaro|raul|raúl|diego|enrique|miguel|carlos|juan|andres|andrés|jose|josé|fernando|gonzalo|david|mark|guy|christopher|eric|brandon|liam|james|paul|thomas|henri|nicolas|matteo|giorgio|bruno|joao|joão|jens|hans|stefan|conrad|male|hombre|masculino|\bman\b)/i;
+const FEMALE_HINTS =
+  /(sabina|helena|laura|elena|paulina|monica|mónica|dalia|lucia|lucía|maria|maría|samantha|zira|aria|jenny|female|mujer|woman|google)/i;
 const LANG_OPTS: { key: "auto" | Lang; label: string }[] = [
   { key: "auto", label: "🌐 Auto" },
   { key: "es", label: "🇪🇸 ES" },
@@ -69,6 +75,9 @@ export default function AvatarPage() {
   const [typed, setTyped] = useState("");
   const [mood, setMood] = useState("humano");
   const [langMode, setLangMode] = useState<"auto" | Lang>("es"); // default Spanish
+  const [gender, setGender] = useState<"male" | "female">("male"); // default male voice
+  const [voiceURI, setVoiceURI] = useState<string>("");
+  const [voicesState, setVoicesState] = useState<SpeechSynthesisVoice[]>([]);
 
   const recognitionRef = useRef<any>(null);
   const convoRef = useRef<{ role: string; content: string }[]>([]); // user/assistant only
@@ -81,7 +90,28 @@ export default function AvatarPage() {
   const utterCountRef = useRef(0);
   const langRef = useRef<Lang>("es"); // effective conversation language
   const langModeRef = useRef<"auto" | Lang>("es");
+  const genderRef = useRef<"male" | "female">("male");
+  const manualVoiceRef = useRef<string>(""); // user-picked voiceURI
   const kickedRef = useRef(false); // ensures auto-start fires only once
+
+  useEffect(() => {
+    genderRef.current = gender;
+    if (typeof window !== "undefined") localStorage.setItem("mata_voice_gender", gender);
+  }, [gender]);
+
+  useEffect(() => {
+    manualVoiceRef.current = voiceURI;
+    if (typeof window !== "undefined") localStorage.setItem("mata_voice_uri", voiceURI);
+  }, [voiceURI]);
+
+  // Load saved voice preferences once.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const g = localStorage.getItem("mata_voice_gender");
+    if (g === "male" || g === "female") setGender(g);
+    const v = localStorage.getItem("mata_voice_uri");
+    if (v) setVoiceURI(v);
+  }, []);
 
   useEffect(() => {
     moodRef.current = mood;
@@ -97,17 +127,42 @@ export default function AvatarPage() {
     }
   }, [langMode]);
 
-  // Best available voice for a given language.
+  // Best voice for a language: manual pick first, then gender preference, then any match.
   function pickVoiceFor(lang: Lang): SpeechSynthesisVoice | null {
-    const list = voicesRef.current.length ? voicesRef.current : window.speechSynthesis.getVoices();
-    const m = list.filter((v) => v.lang.toLowerCase().startsWith(lang));
+    const all = voicesRef.current.length ? voicesRef.current : window.speechSynthesis.getVoices();
+    const m = all.filter((v) => v.lang.toLowerCase().startsWith(lang));
+    if (manualVoiceRef.current) {
+      const picked = m.find((v) => v.voiceURI === manualVoiceRef.current);
+      if (picked) return picked;
+    }
+    if (!m.length) return all[0] || null; // no voice for this language installed
+    const wanted = genderRef.current === "male" ? MALE_HINTS : FEMALE_HINTS;
+    const avoid = genderRef.current === "male" ? FEMALE_HINTS : MALE_HINTS;
     return (
-      m.find((v) => /natural|neural/i.test(v.name)) ||
-      m.find((v) => /google/i.test(v.name)) ||
-      m[0] ||
-      list[0] ||
-      null
+      m.find((v) => wanted.test(v.name) && /natural|neural|online/i.test(v.name)) ||
+      m.find((v) => wanted.test(v.name)) ||
+      m.find((v) => !avoid.test(v.name) && /natural|neural|online/i.test(v.name)) ||
+      m.find((v) => !avoid.test(v.name)) ||
+      m[0]
     );
+  }
+
+  function previewVoice() {
+    const lang = langModeRef.current === "auto" ? browserLang() : langModeRef.current;
+    const samples: Record<Lang, string> = {
+      es: "Hola, soy Mata. Así sonará mi voz.",
+      en: "Hi, I'm Mata. This is how my voice sounds.",
+      fr: "Salut, je suis Mata. Voici ma voix.",
+      it: "Ciao, sono Mata. Ecco la mia voce.",
+      pt: "Olá, eu sou a Mata. É assim que soa minha voz.",
+      de: "Hallo, ich bin Mata. So klingt meine Stimme.",
+    };
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(samples[lang]);
+    const v = pickVoiceFor(lang);
+    if (v) u.voice = v;
+    u.lang = speechLocale(lang);
+    window.speechSynthesis.speak(u);
   }
 
   useEffect(() => {
@@ -157,7 +212,9 @@ export default function AvatarPage() {
     recognitionRef.current = rec;
 
     const loadVoices = () => {
-      voicesRef.current = window.speechSynthesis.getVoices();
+      const vs = window.speechSynthesis.getVoices();
+      voicesRef.current = vs;
+      setVoicesState(vs);
     };
     loadVoices();
     window.speechSynthesis.onvoiceschanged = loadVoices;
@@ -331,6 +388,8 @@ export default function AvatarPage() {
   }
 
   const moodView = speaking ? "speaking" : thinking ? "thinking" : listening ? "listening" : "idle";
+  const effLang: Lang = langMode === "auto" ? browserLang() : langMode;
+  const voicesForLang = voicesState.filter((v) => v.lang.toLowerCase().startsWith(effLang));
 
   return (
     <div className="flex flex-col items-center">
@@ -352,6 +411,44 @@ export default function AvatarPage() {
           </button>
         ))}
       </div>
+
+      {/* Gender + voice selector */}
+      <div className="mb-3 flex flex-wrap items-center justify-center gap-2">
+        <button
+          onClick={() => setGender("male")}
+          className={`rounded-full border px-3 py-1 text-xs transition ${gender === "male" ? "border-cyan-400 bg-cyan-400/20 text-white" : "border-white/15 text-zinc-300"}`}
+        >
+          👨 Hombre
+        </button>
+        <button
+          onClick={() => setGender("female")}
+          className={`rounded-full border px-3 py-1 text-xs transition ${gender === "female" ? "border-cyan-400 bg-cyan-400/20 text-white" : "border-white/15 text-zinc-300"}`}
+        >
+          👩 Mujer
+        </button>
+        <select
+          value={voiceURI}
+          onChange={(e) => setVoiceURI(e.target.value)}
+          className="rounded-lg border border-white/15 bg-black/40 px-2 py-1 text-xs text-white outline-none"
+          title="Elige la voz exacta"
+        >
+          <option value="">Voz automática ({gender === "male" ? "hombre" : "mujer"})</option>
+          {voicesForLang.map((v) => (
+            <option key={v.voiceURI} value={v.voiceURI}>
+              {v.name}
+            </option>
+          ))}
+        </select>
+        <button onClick={previewVoice} className="rounded-full border border-white/15 px-3 py-1 text-xs text-zinc-200 hover:bg-white/10">
+          🔊 Probar
+        </button>
+      </div>
+      {voicesForLang.length === 0 && (
+        <p className="mb-3 max-w-md text-center text-xs text-amber-400">
+          ⚠️ Tu dispositivo no tiene voces en {LANG_NAMES[effLang]} (por eso suena con acento extranjero).
+          Instálalas en <b>Configuración de Windows → Hora e idioma → Voz</b>, o usa <b>Microsoft Edge</b> (trae voces naturales en línea).
+        </p>
+      )}
 
       {/* Emotion / talk mode selector */}
       <div className="mb-5 flex flex-wrap justify-center gap-2">
