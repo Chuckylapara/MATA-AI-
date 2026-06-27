@@ -1,5 +1,10 @@
-# Render.com blueprint — deploys the Mata AI backend (all-in-one dev server).
-# Import this repo at https://render.com → New → Blueprint.
+# Render.com blueprint — Mata AI backend + managed PostgreSQL (persistent data).
+databases:
+  - name: mata-ai-db
+    plan: free
+    databaseName: mata
+    user: mata
+
 services:
   - type: web
     name: mata-ai-backend
@@ -14,14 +19,16 @@ services:
       - key: DEV_INMEMORY
         value: "1"                # in-memory queue/rate-limit (no Redis needed)
       - key: DATABASE_URL
-        value: sqlite+aiosqlite:////tmp/mata.db   # ephemeral; see notes for Postgres
+        fromDatabase:             # persistent managed Postgres (survives redeploys)
+          name: mata-ai-db
+          property: connectionString
       - key: JWT_SECRET
-        generateValue: true        # Render generates a strong secret
+        generateValue: true
       - key: ACCESS_TOKEN_TTL_MINUTES
         value: "120"
       - key: GEMINI_API_KEY
-        sync: false                # set this in the Render dashboard (secret)
+        sync: false                # set in the Render dashboard (secret)
       - key: GEMINI_MODEL
         value: gemini-2.5-flash-lite
       - key: CORS_ORIGINS
-        sync: false                # set to your Vercel URL after deploying frontend
+        sync: false                # your Vercel/Firebase URL
