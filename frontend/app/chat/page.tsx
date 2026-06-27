@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, getToken, streamChat } from "@/lib/api";
 import Thinking from "@/components/Thinking";
 import { systemMessage } from "@/services/persona";
-import { captureFromText, memory, memoryPrompt, slidingWindow } from "@/services/memory";
+import { autoExtractMemory, captureFromText, memory, memoryPrompt, slidingWindow } from "@/services/memory";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
@@ -65,8 +65,9 @@ export default function ChatPage() {
 
   async function send() {
     if (!input.trim() || busy) return;
-    // Long-term memory: capture "recuerda que…" / "remember that…".
-    const captured = captureFromText(input);
+    const userText = input;
+    // Long-term memory: capture explicit "recuerda que…" / "remember that…".
+    const captured = captureFromText(userText);
     if (captured) setMemories(memory.list());
     const history = [...messages, { role: "user" as const, content: input }];
     setMessages([...history, { role: "assistant", content: "" }]);
@@ -92,6 +93,12 @@ export default function ChatPage() {
       );
       convId.current = newConv;
       loadConvos(); // refresh history sidebar
+      // Auto-extract durable facts in the background (no added latency).
+      if (!captured) {
+        autoExtractMemory(userText).then((added) => {
+          if (added.length) setMemories(memory.list());
+        });
+      }
     } catch (err: any) {
       if (err?.name === "AbortError") {
         // User pressed stop — keep whatever was generated so far.

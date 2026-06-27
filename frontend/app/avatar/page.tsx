@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { streamChat } from "@/lib/api";
 import { MATA_PERSONA, SEARCH_RULE } from "@/services/persona";
 import { browserLang, detectLang, GREETINGS, Lang, speechLocale } from "@/services/lang";
-import { captureFromText, memoryPrompt, slidingWindow } from "@/services/memory";
+import { autoExtractMemory, captureFromText, memoryPrompt, slidingWindow } from "@/services/memory";
 
 const BASE_PERSONA = `${MATA_PERSONA} ${SEARCH_RULE}`;
 
@@ -203,7 +203,8 @@ export default function AvatarPage() {
   async function handleUtterance(text: string) {
     // Auto-detect the user's language → drives the reply language, voice and recognition.
     langRef.current = detectLang(text, langRef.current);
-    captureFromText(text); // long-term memory ("recuerda que…")
+    const explicit = captureFromText(text); // explicit "recuerda que…"
+    if (!explicit) autoExtractMemory(text); // background auto-memory (fire-and-forget)
     setTurns((t) => [...t, { role: "user", text }]);
     convoRef.current.push({ role: "user", content: text });
     setThinking(true);

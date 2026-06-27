@@ -1,5 +1,7 @@
 "use client";
 
+import { api } from "@/lib/api";
+
 // Long-term memory for Mata AI (persists across sessions, per browser).
 // Plus a sliding-window helper so long conversations stay fast and on-topic.
 // Modular: swap localStorage for Firestore later without changing callers.
@@ -67,4 +69,36 @@ export function captureFromText(text: string): string | null {
 // Keep only the last N messages sent to the model (full history still shown in the UI).
 export function slidingWindow<T>(messages: T[], max = 24): T[] {
   return messages.length <= max ? messages : messages.slice(messages.length - max);
+}
+
+// --- Automatic memory extraction ---
+// Runs in the background after a turn. Asks the model to pull durable personal facts
+// from the user's message and stores them. Returns the newly added facts.
+const EXTRACT_SYS =
+  "Eres un extractor de memoria. Del mensaje del usuario extrae SOLO datos personales duraderos que valga la pena " +
+  "recordar a largo plazo (nombre, ciudad/país, trabajo o estudios, gustos y preferencias, objetivos, relaciones, " +
+  "fechas importantes). NO incluyas preguntas, peticiones momentáneas, ni cosas triviales o de un solo uso. " +
+  "Responde EXCLUSIVAMENTE con un array JSON de cadenas cortas (máx 8 palabras c/u), en el idioma del usuario. " +
+  'Si no hay nada que recordar, responde []. Ejemplo: ["Se llama Drew","Vive en Madrid","Le gusta el café"].';
+
+export async function autoExtractMemory(userText: string): Promise<string[]> {
+  if (!userText || userText.trim().length < 8) return [];
+  try {
+    const res = await api.chat([
+      { role: "system", content: EXTRACT_SYS },
+      { role: "user", content: userText },
+    ]);
+    const txt = (res?.content || "").trim();
+    const match = txt.match(/\[[\s\S]*\]/);
+    if (!match) return [];
+    const arr = JSON.parse(match[0]);
+    if (!Array.isArray(arr)) return [];
+    const added: string[] = [];
+    for (const item of arr) {
+      if (typeof item === "string" && item.trim() && memory.add(item)) added.push(item);
+    }
+    return added;
+  } catch {
+    return [];
+  }
 }
