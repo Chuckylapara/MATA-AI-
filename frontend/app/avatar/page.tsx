@@ -66,6 +66,7 @@ export default function AvatarPage() {
   const moodRef = useRef("humano");
   const utterCountRef = useRef(0);
   const langRef = useRef<Lang>("es"); // current conversation language (auto-detected)
+  const kickedRef = useRef(false); // ensures auto-start fires only once
 
   useEffect(() => {
     moodRef.current = mood;
@@ -146,6 +147,35 @@ export default function AvatarPage() {
       window.speechSynthesis.cancel();
     };
   }, []);
+
+  // Auto-start the conversation as soon as you enter the page. Browsers block audio/mic
+  // until a user gesture, so: if the page already had a gesture (e.g. you clicked the nav
+  // link to get here) we start immediately; otherwise we start on your first click/tap.
+  useEffect(() => {
+    if (!supported) return;
+    const kick = () => {
+      if (kickedRef.current) return;
+      kickedRef.current = true;
+      cleanup();
+      startConversation();
+    };
+    const onGesture = () => kick();
+    const cleanup = () => {
+      window.removeEventListener("pointerdown", onGesture);
+      window.removeEventListener("keydown", onGesture);
+    };
+    window.addEventListener("pointerdown", onGesture);
+    window.addEventListener("keydown", onGesture);
+    // Sticky user activation carries across the in-app navigation → start right away.
+    const ua: any = typeof navigator !== "undefined" ? (navigator as any).userActivation : null;
+    const t = setTimeout(() => {
+      if (!ua || ua.hasBeenActive) kick();
+    }, 350);
+    return () => {
+      clearTimeout(t);
+      cleanup();
+    };
+  }, [supported]);
 
   function startListening() {
     const rec = recognitionRef.current;
@@ -285,7 +315,7 @@ export default function AvatarPage() {
       <style>{robotCss}</style>
       <h1 className="mb-1 text-2xl font-bold">Mata · Asistente en vivo</h1>
       <p className="mb-4 text-center text-sm text-zinc-400">
-        Voz en tiempo real · respuestas humanas · interrúmpela cuando quieras · pídele que te busque cosas.
+        Mata te saluda al entrar y conversas por voz · te recuerda · interrúmpela cuando quieras · pídele que te busque cosas.
       </p>
 
       {/* Emotion / talk mode selector */}
@@ -320,14 +350,14 @@ export default function AvatarPage() {
 
       <p className="mt-5 h-6 text-zinc-300">{interim ? <em>“{interim}”</em> : status}</p>
 
-      {!conversing ? (
-        <button onClick={startConversation} disabled={!supported} className="btn mt-3">🎤 Empezar a conversar</button>
-      ) : (
+      {conversing ? (
         <button onClick={stopConversation} className="btn mt-3 !bg-red-600">■ Terminar conversación</button>
+      ) : (
+        <button onClick={startConversation} disabled={!supported} className="btn mt-3">▶ Reanudar conversación</button>
       )}
 
       {conversing && <p className="mt-2 text-xs text-emerald-400">● En vivo — habla cuando quieras, incluso mientras ella habla</p>}
-      <p className="mt-1 text-xs text-zinc-500">💡 Usa audífonos para interrumpir mejor (evita el eco del altavoz).</p>
+      <p className="mt-1 text-xs text-zinc-500">💡 Mata te habla al entrar. Usa audífonos para interrumpir mejor (evita el eco).</p>
 
       {!supported && (
         <p className="mt-3 max-w-md text-center text-sm text-amber-400">
