@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { streamChat } from "@/lib/api";
 import { MATA_PERSONA, SEARCH_RULE } from "@/services/persona";
 import { browserLang, detectLang, GREETINGS, Lang, speechLocale } from "@/services/lang";
+import { captureFromText, memoryPrompt, slidingWindow } from "@/services/memory";
 
 const BASE_PERSONA = `${MATA_PERSONA} ${SEARCH_RULE}`;
 
@@ -195,12 +196,14 @@ export default function AvatarPage() {
   }
 
   function systemMessage() {
-    return { role: "system", content: `${BASE_PERSONA} Estado de ánimo actual: ${MOODS[moodRef.current].style}` };
+    const parts = [BASE_PERSONA, `Estado de ánimo actual: ${MOODS[moodRef.current].style}`, memoryPrompt()];
+    return { role: "system", content: parts.filter(Boolean).join(" ") };
   }
 
   async function handleUtterance(text: string) {
     // Auto-detect the user's language → drives the reply language, voice and recognition.
     langRef.current = detectLang(text, langRef.current);
+    captureFromText(text); // long-term memory ("recuerda que…")
     setTurns((t) => [...t, { role: "user", text }]);
     convoRef.current.push({ role: "user", content: text });
     setThinking(true);
@@ -215,7 +218,7 @@ export default function AvatarPage() {
     let full = "";
     let pending = ""; // not-yet-spoken buffer; flushed sentence by sentence (real-time voice)
     try {
-      const messages = [systemMessage(), ...convoRef.current];
+      const messages = [systemMessage(), ...slidingWindow(convoRef.current, 24)];
       convIdRef.current = await streamChat(messages, convIdRef.current, (delta) => {
         if (thinking) setThinking(false);
         full += delta;

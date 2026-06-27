@@ -3,10 +3,9 @@ import { useEffect, useRef, useState } from "react";
 import { api, getToken, streamChat } from "@/lib/api";
 import Thinking from "@/components/Thinking";
 import { systemMessage } from "@/services/persona";
+import { captureFromText, memory, memoryPrompt, slidingWindow } from "@/services/memory";
 
 type Msg = { role: "user" | "assistant"; content: string };
-
-const MATA_SYSTEM = systemMessage(); // "Mata AI Assistant" personality (multilingual)
 
 type Convo = { id: string; title: string };
 
@@ -16,6 +15,7 @@ export default function ChatPage() {
   const [busy, setBusy] = useState(false);
   const [convos, setConvos] = useState<Convo[]>([]);
   const [loggedIn, setLoggedIn] = useState(false);
+  const [memories, setMemories] = useState<string[]>([]);
   const convId = useRef<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -32,7 +32,13 @@ export default function ChatPage() {
   useEffect(() => {
     setLoggedIn(!!getToken());
     loadConvos();
+    setMemories(memory.list());
   }, []);
+
+  function forgetMemory(i: number) {
+    memory.remove(i);
+    setMemories(memory.list());
+  }
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -59,6 +65,9 @@ export default function ChatPage() {
 
   async function send() {
     if (!input.trim() || busy) return;
+    // Long-term memory: capture "recuerda que…" / "remember that…".
+    const captured = captureFromText(input);
+    if (captured) setMemories(memory.list());
     const history = [...messages, { role: "user" as const, content: input }];
     setMessages([...history, { role: "assistant", content: "" }]);
     setInput("");
@@ -66,7 +75,9 @@ export default function ChatPage() {
     const controller = new AbortController();
     abortRef.current = controller;
     try {
-      const payload = [MATA_SYSTEM, ...history];
+      // Personality + remembered facts, then a sliding window of recent turns.
+      const sys = systemMessage(memoryPrompt());
+      const payload = [sys, ...slidingWindow(history, 24)];
       const newConv = await streamChat(
         payload as any,
         convId.current,
@@ -120,6 +131,23 @@ export default function ChatPage() {
               💬 {c.title}
             </button>
           ))}
+        </div>
+
+        {/* Long-term memory */}
+        <div className="mt-3 border-t border-white/10 pt-3">
+          <p className="mb-2 px-1 text-xs uppercase tracking-widest text-zinc-500">🧠 Memoria</p>
+          {memories.length === 0 ? (
+            <p className="px-1 text-xs text-zinc-500">Dile “recuerda que…” y lo recordaré.</p>
+          ) : (
+            <div className="max-h-40 space-y-1 overflow-y-auto">
+              {memories.map((mItem, i) => (
+                <div key={i} className="group flex items-start gap-1 rounded-lg px-2 py-1 text-xs text-zinc-300 hover:bg-white/5">
+                  <span className="flex-1">• {mItem}</span>
+                  <button onClick={() => forgetMemory(i)} className="opacity-0 transition group-hover:opacity-100" title="Olvidar">✕</button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </aside>
 
