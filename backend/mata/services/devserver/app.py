@@ -11,6 +11,7 @@ Run:  SERVICE=devserver DEV_INMEMORY=1 DATABASE_URL=sqlite+aiosqlite:///./mata.d
 from __future__ import annotations
 
 import asyncio
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -46,14 +47,28 @@ _MOUNTS = {
 
 _worker_tasks: list[asyncio.Task] = []
 
+# Workers are opt-in (set ENABLE_WORKERS=1). Off by default keeps memory low on
+# small free hosts; video/music are demo-only, the core modules don't need them.
+_ENABLE_WORKERS = os.getenv("ENABLE_WORKERS", "0") == "1"
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await init_db()
-    await _seed_admin()
-    # Background async-generation workers (in-memory queue, single process).
-    _worker_tasks.append(asyncio.create_task(run_worker("video", run_video)))
-    _worker_tasks.append(asyncio.create_task(run_worker("music", run_music)))
+    # Never let a startup hiccup crash the whole process (that would make the host
+    # report "no server"). Log and continue so the API still comes up.
+    try:
+        await init_db()
+        await _seed_admin()
+    except Exception as exc:  # noqa: BLE001
+        print(f"[devserver] startup warning: {exc}", flush=True)
+
+    if _ENABLE_WORKERS:
+        try:
+            _worker_tasks.append(asyncio.create_task(run_worker("video", run_video)))
+            _worker_tasks.append(asyncio.create_task(run_worker("music", run_music)))
+        except Exception as exc:  # noqa: BLE001
+            print(f"[devserver] worker start warning: {exc}", flush=True)
+
     yield
     for t in _worker_tasks:
         t.cancel()
@@ -67,6 +82,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.get("/")
+async def root():
+    return {"service": "Mata AI", "status": "ok", "docs": "/auth/docs"}
 
 
 @app.get("/healthz")
