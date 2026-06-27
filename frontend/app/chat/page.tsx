@@ -2,17 +2,11 @@
 import { useEffect, useRef, useState } from "react";
 import { api, getToken, streamChat } from "@/lib/api";
 import Thinking from "@/components/Thinking";
+import { systemMessage } from "@/services/persona";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
-// Mata AI personality — conversational, warm, helpful.
-const MATA_SYSTEM = {
-  role: "system",
-  content:
-    "Eres Mata AI, una asistente conversacional cálida, natural y muy útil. Hablas en español de forma clara y cercana, " +
-    "como una persona real. Eres concisa cuando la pregunta es simple y detallada cuando hace falta. Nunca digas que eres " +
-    "un modelo o IA genérica: eres Mata AI. Usas un tono amable y profesional, y das pasos concretos cuando te piden ayuda.",
-};
+const MATA_SYSTEM = systemMessage(); // "Mata AI Assistant" personality (multilingual)
 
 type Convo = { id: string; title: string };
 
@@ -24,6 +18,7 @@ export default function ChatPage() {
   const [loggedIn, setLoggedIn] = useState(false);
   const convId = useRef<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   async function loadConvos() {
     try {
@@ -58,27 +53,49 @@ export default function ChatPage() {
     convId.current = null;
   }
 
+  function stop() {
+    abortRef.current?.abort();
+  }
+
   async function send() {
     if (!input.trim() || busy) return;
     const history = [...messages, { role: "user" as const, content: input }];
     setMessages([...history, { role: "assistant", content: "" }]);
     setInput("");
     setBusy(true);
+    const controller = new AbortController();
+    abortRef.current = controller;
     try {
       const payload = [MATA_SYSTEM, ...history];
-      const newConv = await streamChat(payload as any, convId.current, (delta) => {
-        setMessages((cur) => {
-          const copy = [...cur];
-          copy[copy.length - 1] = { role: "assistant", content: copy[copy.length - 1].content + delta };
-          return copy;
-        });
-      });
+      const newConv = await streamChat(
+        payload as any,
+        convId.current,
+        (delta) => {
+          setMessages((cur) => {
+            const copy = [...cur];
+            copy[copy.length - 1] = { role: "assistant", content: copy[copy.length - 1].content + delta };
+            return copy;
+          });
+        },
+        controller.signal,
+      );
       convId.current = newConv;
       loadConvos(); // refresh history sidebar
     } catch (err: any) {
-      setMessages((cur) => [...cur.slice(0, -1), { role: "assistant", content: `⚠️ Error: ${err.message}. Intenta de nuevo.` }]);
+      if (err?.name === "AbortError") {
+        // User pressed stop — keep whatever was generated so far.
+        setMessages((cur) => {
+          const copy = [...cur];
+          const last = copy[copy.length - 1];
+          if (last && last.role === "assistant" && !last.content) copy.pop();
+          return copy;
+        });
+      } else {
+        setMessages((cur) => [...cur.slice(0, -1), { role: "assistant", content: `⚠️ Error: ${err.message}. Intenta de nuevo.` }]);
+      }
     } finally {
       setBusy(false);
+      abortRef.current = null;
     }
   }
 
@@ -135,7 +152,11 @@ export default function ChatPage() {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && send()}
           />
-          <button className="btn" onClick={send} disabled={busy}>{busy ? "…" : "Enviar"}</button>
+          {busy ? (
+            <button className="btn !bg-red-600" onClick={stop} title="Detener respuesta">■ Stop</button>
+          ) : (
+            <button className="btn" onClick={send}>Enviar</button>
+          )}
         </div>
       </div>
     </div>

@@ -1,15 +1,10 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { streamChat } from "@/lib/api";
+import { MATA_PERSONA, SEARCH_RULE } from "@/services/persona";
+import { browserLang, detectLang, GREETINGS, Lang, speechLocale } from "@/services/lang";
 
-const BASE_PERSONA =
-  "Eres Mata AI, una asistente con personalidad MUY humana, cálida y natural. Hablas en español como una persona " +
-  "real charlando: frases cortas, espontáneas, con muletillas naturales ('claro', 'mira', 'oye', 'la verdad'). " +
-  "NUNCA digas que eres una IA, un modelo o un robot; responde como una amiga cercana. Respuestas breves (1-2 frases) salvo que pidan detalle. " +
-  "Cuando te pidan BUSCAR o COMPRAR algo (vuelos, hoteles, productos, lugares, info), responde con UNA frase corta y natural y luego incluye " +
-  "1 a 3 ENLACES DIRECTOS útiles, cada uno en su línea empezando con https:// , construidos con sus datos " +
-  "(vuelos -> https://www.google.com/travel/flights?q=... ; compras -> https://www.amazon.com/s?k=... ; info -> https://www.google.com/search?q=...). " +
-  "No leas las URLs en voz; di 'te dejo unos enlaces abajo'.";
+const BASE_PERSONA = `${MATA_PERSONA} ${SEARCH_RULE}`;
 
 // Emotion / talk modes — change BOTH the wording style and the voice.
 const MOODS: Record<string, { label: string; emoji: string; style: string; rate: number; pitch: number }> = {
@@ -63,16 +58,34 @@ export default function AvatarPage() {
   const recognitionRef = useRef<any>(null);
   const convoRef = useRef<{ role: string; content: string }[]>([]); // user/assistant only
   const convIdRef = useRef<string | null>(null);
-  const voiceRef = useRef<SpeechSynthesisVoice | null>(null);
+  const voicesRef = useRef<SpeechSynthesisVoice[]>([]);
   const conversingRef = useRef(false);
   const speakingRef = useRef(false);
   const spokenTextRef = useRef("");
   const moodRef = useRef("humano");
   const utterCountRef = useRef(0);
+  const langRef = useRef<Lang>("es"); // current conversation language (auto-detected)
 
   useEffect(() => {
     moodRef.current = mood;
   }, [mood]);
+
+  useEffect(() => {
+    langRef.current = browserLang();
+  }, []);
+
+  // Best available voice for a given language.
+  function pickVoiceFor(lang: Lang): SpeechSynthesisVoice | null {
+    const list = voicesRef.current.length ? voicesRef.current : window.speechSynthesis.getVoices();
+    const m = list.filter((v) => v.lang.toLowerCase().startsWith(lang));
+    return (
+      m.find((v) => /natural|neural/i.test(v.name)) ||
+      m.find((v) => /google/i.test(v.name)) ||
+      m[0] ||
+      list[0] ||
+      null
+    );
+  }
 
   useEffect(() => {
     const SR = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
@@ -81,7 +94,7 @@ export default function AvatarPage() {
       return;
     }
     const rec = new SR();
-    rec.lang = "es-ES";
+    rec.lang = speechLocale(langRef.current);
     rec.continuous = true;
     rec.interimResults = true;
 
@@ -120,18 +133,11 @@ export default function AvatarPage() {
     };
     recognitionRef.current = rec;
 
-    const pickVoice = () => {
-      const es = window.speechSynthesis.getVoices().filter((v) => v.lang.toLowerCase().startsWith("es"));
-      voiceRef.current =
-        es.find((v) => /natural|neural/i.test(v.name)) ||
-        es.find((v) => /google/i.test(v.name)) ||
-        es.find((v) => /(helena|sabina|laura|elena|paulina|m[oó]nica|dalia)/i.test(v.name)) ||
-        es[0] ||
-        window.speechSynthesis.getVoices()[0] ||
-        null;
+    const loadVoices = () => {
+      voicesRef.current = window.speechSynthesis.getVoices();
     };
-    pickVoice();
-    window.speechSynthesis.onvoiceschanged = pickVoice;
+    loadVoices();
+    window.speechSynthesis.onvoiceschanged = loadVoices;
 
     return () => {
       conversingRef.current = false;
@@ -144,6 +150,7 @@ export default function AvatarPage() {
     const rec = recognitionRef.current;
     if (!rec || !conversingRef.current) return;
     try {
+      rec.lang = speechLocale(langRef.current); // follow the detected language
       rec.start();
       setListening(true);
     } catch {
@@ -165,8 +172,9 @@ export default function AvatarPage() {
     spokenTextRef.current += " " + clean.toLowerCase();
     const m = MOODS[moodRef.current];
     const u = new SpeechSynthesisUtterance(clean);
-    if (voiceRef.current) u.voice = voiceRef.current;
-    u.lang = "es-ES";
+    const v = pickVoiceFor(langRef.current);
+    if (v) u.voice = v;
+    u.lang = speechLocale(langRef.current);
     u.rate = m.rate;
     u.pitch = m.pitch;
     u.onstart = () => {
@@ -191,6 +199,8 @@ export default function AvatarPage() {
   }
 
   async function handleUtterance(text: string) {
+    // Auto-detect the user's language → drives the reply language, voice and recognition.
+    langRef.current = detectLang(text, langRef.current);
     setTurns((t) => [...t, { role: "user", text }]);
     convoRef.current.push({ role: "user", content: text });
     setThinking(true);
@@ -239,8 +249,9 @@ export default function AvatarPage() {
     convoRef.current = [];
     convIdRef.current = null;
     spokenTextRef.current = "";
+    langRef.current = browserLang();
     startListening();
-    const greeting = "¡Hola! ¿Cómo puedo ayudarte? Yo soy Mata AI.";
+    const greeting = GREETINGS[langRef.current];
     setTurns([{ role: "assistant", text: greeting }]);
     enqueueSpeak(greeting);
   }

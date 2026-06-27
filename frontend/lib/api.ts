@@ -92,12 +92,14 @@ export async function streamChat(
   messages: { role: string; content: string }[],
   conversationId: string | null,
   onDelta: (text: string) => void,
+  signal?: AbortSignal,
 ): Promise<string | null> {
   const send = () =>
     fetch(`${API}/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
       body: JSON.stringify({ messages, conversation_id: conversationId, stream: true }),
+      signal,
     });
   let res = await send();
   // Access token expired → refresh once and retry.
