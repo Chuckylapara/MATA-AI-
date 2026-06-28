@@ -2,6 +2,8 @@
 
 Selects which service app to expose based on the SERVICE env var. This lets every
 microservice share one Docker image — only the SERVICE/PORT env differs.
+
+Deploy marker: paypal-env-v1
 """
 from __future__ import annotations
 
