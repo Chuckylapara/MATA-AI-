@@ -25,13 +25,27 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* ── Animated cosmic background ──────────────────────── */
+/* ── Animated cosmic background (premium aurora) ─────── */
 .bg-fx {
-  position: fixed; inset: 0; z-index: -2;
-  background: radial-gradient(ellipse 100% 70% at 20% 0%, rgba(168,85,247,0.22) 0%, transparent 60%),
-              radial-gradient(ellipse 80% 60% at 80% 10%, rgba(34,211,238,0.18) 0%, transparent 55%),
-              radial-gradient(ellipse 60% 50% at 50% 100%, rgba(236,72,153,0.14) 0%, transparent 50%),
+  position: fixed; inset: -10%; z-index: -2;
+  background: radial-gradient(ellipse 100% 70% at 20% 0%, rgba(168,85,247,0.26) 0%, transparent 60%),
+              radial-gradient(ellipse 80% 60% at 80% 10%, rgba(34,211,238,0.20) 0%, transparent 55%),
+              radial-gradient(ellipse 70% 55% at 85% 80%, rgba(99,102,241,0.16) 0%, transparent 55%),
+              radial-gradient(ellipse 60% 50% at 50% 100%, rgba(236,72,153,0.16) 0%, transparent 50%),
               linear-gradient(180deg, #04020e 0%, #080618 50%, #060210 100%);
+  animation: auroraShift 26s ease-in-out infinite;
+  will-change: transform, filter;
+}
+@keyframes auroraShift {
+  0%,100% { filter: hue-rotate(0deg) saturate(1); transform: scale(1.05) translate3d(0,0,0); }
+  50%     { filter: hue-rotate(26deg) saturate(1.22); transform: scale(1.16) translate3d(-1.5%,-2%,0); }
+}
+
+/* Premium film grain — adds a subtle, expensive texture over everything (static, GPU-cheap) */
+.bg-grain {
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  opacity: 0.045; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 .bg-grid {
   position: fixed; left: 0; right: 0; bottom: 0; height: 50vh; z-index: -1;
@@ -68,10 +82,13 @@ html, body {
 .font-serif    { font-family: 'Source Serif 4', Georgia, serif; }
 
 .neon-text {
-  background: linear-gradient(90deg, var(--neon-cyan) 0%, var(--neon-purple) 50%, var(--neon-pink) 100%);
+  background: linear-gradient(90deg, var(--neon-cyan) 0%, var(--neon-purple) 35%, var(--neon-pink) 60%, var(--neon-cyan) 100%);
+  background-size: 220% auto;
   -webkit-background-clip: text; background-clip: text; color: transparent;
   filter: drop-shadow(0 0 18px rgba(168,85,247,0.55));
+  animation: neonFlow 7s linear infinite;
 }
+@keyframes neonFlow { to { background-position: 220% center; } }
 .neon-text-cyan {
   background: linear-gradient(90deg, #67e8f9, #22d3ee, #06b6d4);
   -webkit-background-clip: text; background-clip: text; color: transparent;
@@ -219,13 +236,21 @@ html, body {
     -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
     -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none;
   }
+  /* Diagonal shine that sweeps across a card on hover */
+  .card::after {
+    content: ''; position: absolute; top: -50%; left: -60%; width: 40%; height: 200%;
+    background: linear-gradient(120deg, transparent, rgba(255,255,255,0.16), transparent);
+    transform: skewX(-20deg); pointer-events: none;
+    transition: left 0.7s cubic-bezier(0.22,1,0.36,1); opacity: 0;
+  }
+  .card:hover::after { left: 130%; opacity: 1; }
   .card:hover {
     transform: translateY(-5px) scale(1.01);
     box-shadow:
       inset 0 1px 0 rgba(255,255,255,0.18),
       0 20px 60px rgba(0,0,0,0.5),
-      0 0 40px rgba(34,211,238,0.1),
-      0 0 0 1px rgba(34,211,238,0.3);
+      0 0 40px rgba(34,211,238,0.14),
+      0 0 0 1px rgba(34,211,238,0.35);
   }
 
   /* Buttons */
@@ -243,6 +268,16 @@ html, body {
     content: ''; position: absolute; inset: 0;
     background: linear-gradient(180deg, rgba(255,255,255,0.12) 0%, transparent 60%);
     pointer-events: none;
+  }
+  /* Light sheen that sweeps across the button — the signature "premium product" shine */
+  .btn::after {
+    content: ''; position: absolute; top: 0; bottom: 0; left: -75%; width: 50%;
+    background: linear-gradient(120deg, transparent, rgba(255,255,255,0.45), transparent);
+    transform: skewX(-22deg); pointer-events: none;
+    animation: btnSheen 5.5s ease-in-out infinite;
+  }
+  @keyframes btnSheen {
+    0%, 18% { left: -75%; } 38%, 100% { left: 160%; }
   }
   .btn:hover {
     transform: scale(1.05);

@@ -106,9 +106,44 @@ class PollinationsImageProvider:
         ]
 
 
+class FallbackImageProvider:
+    """Tries each provider in priority order, returning the first success.
+
+    Guarantees the endpoint always delivers: Pollinations (free, no key) and the
+    SVG mock are always appended as last resorts, so a misconfigured or quota-blocked
+    premium key (e.g. a Gemini key without Imagen enabled) never breaks generation.
+    Provider errors are logged but never propagated, so upstream API keys embedded in
+    error URLs are never leaked to the client.
+    """
+    name = "fallback"
+
+    def __init__(self, providers: list):
+        self._providers = providers
+
+    async def generate(self, prompt: str, size: str, n: int, style: str | None) -> list[str]:
+        import logging
+
+        last_exc: Exception | None = None
+        for provider in self._providers:
+            try:
+                urls = await provider.generate(prompt, size, n, style)
+                if urls:
+                    return urls
+            except Exception as exc:  # noqa: BLE001
+                last_exc = exc
+                # Log the provider name only — never the raw error (may embed the API key).
+                logging.getLogger("mata.image").warning("Image provider %r failed; trying next.", provider.name)
+        # Pollinations/mock are always in the chain, so this is effectively unreachable.
+        raise RuntimeError(f"All image providers failed (last: {type(last_exc).__name__})")
+
+
 def get_image_provider():
+    chain: list = []
     if settings.gemini_api_key:
-        return GeminiImageProvider()
+        chain.append(GeminiImageProvider())
     if settings.openai_api_key:
-        return OpenAIImageProvider()
-    return PollinationsImageProvider()
+        chain.append(OpenAIImageProvider())
+    # Free, keyless provider + offline mock guarantee the chain always succeeds.
+    chain.append(PollinationsImageProvider())
+    chain.append(MockImageProvider())
+    return FallbackImageProvider(chain)

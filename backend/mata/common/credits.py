@@ -31,6 +31,18 @@ TIER_POLICY: dict[Tier, dict] = {
     Tier.business: {"monthly_credits": 30_000, "rate_limit_per_min": 600, "premium_models": True},
 }
 
+# One-time credit packs (no subscription). Bought via PayPal, added on top of the balance.
+CREDIT_PACKS: dict[str, dict] = {
+    "small":  {"price_usd": 5,  "credits": 1_500,  "label": "Paquete inicial"},
+    "medium": {"price_usd": 15, "credits": 5_000,  "label": "Paquete creador"},
+    "large":  {"price_usd": 40, "credits": 15_000, "label": "Paquete pro"},
+}
+
+
+async def grant_credits(db: AsyncSession, user_id: str, amount: int) -> None:
+    """Add credits to a user's balance (one-time top-up, e.g. a purchased pack)."""
+    await db.execute(update(User).where(User.id == user_id).values(credits=User.credits + amount))
+
 
 @dataclass
 class Reservation:

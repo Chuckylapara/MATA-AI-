@@ -13,13 +13,13 @@ const modules = [
 ];
 
 const stats = [
-  { num: "8+",   label: "Módulos de IA" },
-  { num: "∞",    label: "Conversaciones" },
-  { num: "100%", label: "API-first" },
-  { num: "3D",   label: "Experiencia" },
+  { num: "3 min", label: "De idea a video" },
+  { num: "8+",    label: "Herramientas IA" },
+  { num: "$0",    label: "Para empezar" },
+  { num: "24/7",  label: "Producción auto" },
 ];
 
-const pills = ["Voz en vivo", "IA generativa", "Agentes autónomos", "Multimodal"];
+const pills = ["Sin cámara", "Sin editar", "Sin mostrar rostro", "100% IA"];
 
 export default function Home() {
   return (
@@ -44,9 +44,9 @@ export default function Home() {
             <div className="flex items-center justify-between">
               <span className="pill">
                 <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
-                PLATAFORMA DE IA
+                CREA · PUBLICA · MONETIZA
               </span>
-              <span className="pill">v2.0 · 2026</span>
+              <span className="pill">Empieza gratis</span>
             </div>
 
             {/* Hero center */}
@@ -58,25 +58,26 @@ export default function Home() {
 
               {/* Headline */}
               <h1 className="font-display font-semibold text-5xl lg:text-6xl xl:text-7xl leading-[1.1] tracking-[-0.04em] text-white mb-6">
-                El futuro de<br />
+                Crea contenido que<br />
                 <em className="font-serif not-italic" style={{color:'rgba(255,255,255,0.7)', fontFamily:"'Source Serif 4', Georgia, serif", fontStyle:'italic'}}>
-                  la inteligencia
+                  se vuelve viral
                 </em>{" "}
-                artificial
+                con IA
               </h1>
 
               <p className="text-white/60 text-base lg:text-lg font-light leading-relaxed max-w-md mb-10">
-                Voz, chat, imágenes, video, música, código y agentes&nbsp;—
-                todo en una sola plataforma diseñada para el futuro.
+                Convierte una idea en un video completo&nbsp;— guion, imágenes,
+                voz y música&nbsp;— en minutos. Publica, crece y monetiza sin
+                equipo ni cámara.
               </p>
 
               {/* CTA */}
               <div className="flex flex-wrap gap-4 mb-10">
-                <Link href="/avatar" className="btn text-sm px-7 py-3">
-                  <span>🎤</span> Hablar con Mata
+                <Link href="/studio" className="btn text-sm px-7 py-3">
+                  <span>✨</span> Crear mi primer video gratis
                 </Link>
-                <Link href="/studio" className="btn-glass text-sm px-7 py-3">
-                  ✨ Crear ahora
+                <Link href="/billing" className="btn-glass text-sm px-7 py-3">
+                  Ver planes
                 </Link>
               </div>
 
@@ -197,15 +198,16 @@ export default function Home() {
           {/* bg glow */}
           <div className="absolute inset-0 bg-gradient-to-br from-violet-600/10 via-transparent to-cyan-600/10 pointer-events-none" />
 
-          <p className="text-xs tracking-[0.3em] uppercase text-white/40 mb-4 relative z-10">ÚNETE AHORA</p>
+          <p className="text-xs tracking-[0.3em] uppercase text-white/40 mb-4 relative z-10">EMPIEZA HOY</p>
           <h2 className="font-display font-semibold text-4xl lg:text-5xl text-white tracking-tight mb-4 relative z-10">
-            Crea sin{" "}
+            Tu primer video,{" "}
             <em className="font-serif" style={{fontFamily:"'Source Serif 4', serif", fontStyle:'italic', color:'rgba(255,255,255,0.75)'}}>
-              límites
+              gratis hoy
             </em>
           </h2>
           <p className="text-white/50 text-base max-w-md mx-auto mb-10 relative z-10">
-            Accede a todos los módulos de IA en una plataforma unificada, diseñada para creadores del futuro.
+            Crea contenido listo para publicar en minutos. Sin tarjeta de crédito.
+            Sube de plan solo cuando ya estés generando.
           </p>
           <div className="flex flex-wrap justify-center gap-4 relative z-10">
             <Link href="/login" className="btn px-10 py-3.5 text-base">Comenzar gratis</Link>

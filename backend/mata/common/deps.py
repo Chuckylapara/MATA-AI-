@@ -49,6 +49,22 @@ async def get_identity(
     raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Not authenticated")
 
 
+async def get_identity_optional(
+    authorization: str | None = Header(default=None),
+    x_user_id: str | None = Header(default=None),
+    x_user_role: str | None = Header(default=None),
+    x_user_tier: str | None = Header(default=None),
+) -> Identity | None:
+    """Like get_identity, but returns None for anonymous callers instead of raising.
+
+    Used by endpoints that support a limited guest experience (e.g. a few free chat
+    messages before requiring sign-up).
+    """
+    if not x_user_id and not (authorization and authorization.lower().startswith("bearer ")):
+        return None
+    return await get_identity(authorization, x_user_id, x_user_role, x_user_tier)
+
+
 def require_role(*roles: str):
     async def _dep(identity: Identity = Depends(get_identity)) -> Identity:
         if identity.role not in roles:

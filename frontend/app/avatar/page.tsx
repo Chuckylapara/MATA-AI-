@@ -331,7 +331,7 @@ export default function AvatarPage() {
 
       <div className="av-layout">
         <div className={`stage mood-${mood}`}>
-          <HumanAvatar state={face} mood={mood} mouthLevelRef={mouthLevelRef} />
+          <AIOrb state={face} mood={mood} mouthLevelRef={mouthLevelRef} />
           <div className="status-pill">
             {speaking ? "● Hablando" : thinking ? "… Pensando" : listening ? "🎙 Escuchando" : conversing ? "En vivo" : "Pausado"}
           </div>
@@ -393,8 +393,153 @@ export default function AvatarPage() {
   );
 }
 
-// ── Ultra Realistic Human Avatar ──────────────────────────────────────────────
-function HumanAvatar({ state, mood, mouthLevelRef }: {
+// ── AI Orb Avatar (estilo asistente de voz IA, tipo ChatGPT) ──────────────────
+function AIOrb({ state, mouthLevelRef }: {
+  state: string; mood: string; mouthLevelRef: React.MutableRefObject<number>;
+}) {
+  const cvs = useRef<HTMLCanvasElement>(null);
+  const raf = useRef(0);
+  const stRef = useRef(state);
+  useEffect(() => { stRef.current = state; }, [state]);
+
+  useEffect(() => {
+    const canvas = cvs.current; if (!canvas) return;
+    const ctx = canvas.getContext("2d")!;
+    const W = canvas.width, H = canvas.height;
+    const cx = W / 2, cy = H / 2;
+
+    const COLORS: Record<string, [number, number, number]> = {
+      idle:      [34, 211, 238],
+      listening: [168, 85, 247],
+      thinking:  [234, 179, 8],
+      speaking:  [16, 185, 129],
+      surprised: [244, 114, 182],
+    };
+
+    const s = { t: 0, level: 0, breath: 0, rot: 0, curCol: [34, 211, 238] as number[] };
+    const lerp = (a: number, b: number, t: number) => a + (b - a) * Math.min(t, 1);
+    const lerpCol = (a: number[], b: number[], t: number) =>
+      [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
+
+    function tick(dt: number) {
+      s.t += dt;
+      const st = stRef.current;
+      const pal = COLORS[st] || COLORS.idle;
+      s.curCol = lerpCol(s.curCol, pal, dt * 3);
+      const target =
+        st === "speaking"  ? mouthLevelRef.current :
+        st === "thinking"  ? 0.22 + Math.abs(Math.sin(s.t * 3)) * 0.16 :
+        st === "listening" ? 0.10 + Math.abs(Math.sin(s.t * 1.5)) * 0.12 :
+        st === "surprised" ? 0.7 :
+                             0.04 + Math.abs(Math.sin(s.t * 0.8)) * 0.05;
+      s.level = lerp(s.level, target, dt * (st === "speaking" ? 18 : 6));
+      s.breath = Math.sin(s.t * 0.9) * 0.5 + 0.5;
+      s.rot += dt * (st === "thinking" ? 1.6 : 0.45);
+      ctx.clearRect(0, 0, W, H);
+      draw();
+    }
+
+    function draw() {
+      const [r, g, b] = s.curCol.map(Math.round);
+      const baseR = Math.min(W, H) * 0.19;
+      const R = baseR * (1 + s.level * 0.35 + s.breath * 0.05);
+
+      // Ambient glow
+      const amb = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.min(W, H) * 0.55);
+      amb.addColorStop(0, `rgba(${r},${g},${b},0.18)`);
+      amb.addColorStop(0.5, `rgba(${r},${g},${b},0.05)`);
+      amb.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = amb; ctx.fillRect(0, 0, W, H);
+
+      // Reactive waveform rings
+      for (let ring = 0; ring < 3; ring++) {
+        const rr = R * (1.25 + ring * 0.22);
+        ctx.beginPath();
+        const pts = 80;
+        for (let i = 0; i <= pts; i++) {
+          const ang = (i / pts) * Math.PI * 2;
+          const wob = Math.sin(ang * 4 + s.t * 2 + ring) * (3 + s.level * 22)
+                    + Math.sin(ang * 7 - s.t * 1.5 + ring * 2) * (2 + s.level * 10);
+          const rad = rr + wob;
+          const x = cx + Math.cos(ang) * rad;
+          const y = cy + Math.sin(ang) * rad;
+          i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.strokeStyle = `rgba(${r},${g},${b},${0.22 - ring * 0.06})`;
+        ctx.lineWidth = 1.5; ctx.stroke();
+      }
+
+      // Orbiting particles
+      for (let i = 0; i < 14; i++) {
+        const ang = s.rot + (i / 14) * Math.PI * 2;
+        const dist = R * 1.5 + Math.sin(s.t * 1.3 + i) * 12;
+        const x = cx + Math.cos(ang) * dist;
+        const y = cy + Math.sin(ang) * dist * 0.95;
+        const sz = 1.2 + (Math.sin(s.t * 2 + i) * 0.5 + 0.5) * 2.2;
+        const al = 0.25 + (Math.sin(s.t * 2 + i) * 0.5 + 0.5) * 0.5 * (0.4 + s.level);
+        ctx.beginPath(); ctx.arc(x, y, sz, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${r},${g},${b},${al})`;
+        ctx.shadowColor = `rgba(${r},${g},${b},0.8)`; ctx.shadowBlur = 8;
+        ctx.fill(); ctx.shadowBlur = 0;
+      }
+
+      // Halo
+      ctx.beginPath(); ctx.arc(cx, cy, R * 1.15, 0, Math.PI * 2);
+      const halo = ctx.createRadialGradient(cx, cy, R * 0.5, cx, cy, R * 1.15);
+      halo.addColorStop(0, `rgba(${r},${g},${b},0.35)`);
+      halo.addColorStop(1, `rgba(${r},${g},${b},0)`);
+      ctx.fillStyle = halo; ctx.fill();
+
+      // Core sphere
+      ctx.save();
+      ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.clip();
+      const core = ctx.createRadialGradient(cx - R * 0.3, cy - R * 0.35, R * 0.1, cx, cy, R * 1.1);
+      core.addColorStop(0, "rgba(255,255,255,0.95)");
+      core.addColorStop(0.25, `rgba(${Math.min(255, r + 60)},${Math.min(255, g + 60)},${Math.min(255, b + 60)},0.95)`);
+      core.addColorStop(0.7, `rgba(${r},${g},${b},0.95)`);
+      core.addColorStop(1, `rgba(${Math.round(r * 0.4)},${Math.round(g * 0.4)},${Math.round(b * 0.45)},1)`);
+      ctx.fillStyle = core; ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
+
+      // Liquid swirls inside
+      const swirls: number[][] = [[255, 255, 255], [r, g, b], [Math.min(255, r + 80), Math.min(255, g + 80), Math.min(255, b + 80)]];
+      for (let i = 0; i < 3; i++) {
+        const ox = Math.cos(s.t * 0.7 + i * 2.1) * R * 0.35;
+        const oy = Math.sin(s.t * 0.9 + i * 1.7) * R * 0.35;
+        const sw = ctx.createRadialGradient(cx + ox, cy + oy, 0, cx + ox, cy + oy, R * 0.8);
+        const cc = swirls[i];
+        sw.addColorStop(0, `rgba(${cc[0]},${cc[1]},${cc[2]},${0.18 + s.level * 0.25})`);
+        sw.addColorStop(1, `rgba(${cc[0]},${cc[1]},${cc[2]},0)`);
+        ctx.fillStyle = sw; ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
+      }
+
+      // Top specular highlight
+      const spec = ctx.createRadialGradient(cx - R * 0.35, cy - R * 0.4, 0, cx - R * 0.35, cy - R * 0.4, R * 0.6);
+      spec.addColorStop(0, "rgba(255,255,255,0.85)");
+      spec.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = spec; ctx.fillRect(cx - R, cy - R, R * 2, R * 2);
+      ctx.restore();
+
+      // Rim light
+      ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(255,255,255,0.25)"; ctx.lineWidth = 1.5; ctx.stroke();
+    }
+
+    let last = 0;
+    function loop(ts: number) {
+      const dt = Math.min((ts - last) / 1000, 0.05);
+      last = ts; tick(dt);
+      raf.current = requestAnimationFrame(loop);
+    }
+    raf.current = requestAnimationFrame((ts) => { last = ts; loop(ts); });
+    return () => cancelAnimationFrame(raf.current);
+  }, []);
+
+  return <canvas ref={cvs} width={560} height={600} style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }} />;
+}
+
+// ── (legacy) Ultra Realistic Human Avatar — ya no se usa ──────────────────────
+function _HumanAvatarLegacy({ state, mood, mouthLevelRef }: {
   state: string; mood: string; mouthLevelRef: React.MutableRefObject<number>;
 }) {
   const cvs = useRef<HTMLCanvasElement>(null);

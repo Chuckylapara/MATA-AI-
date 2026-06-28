@@ -16,6 +16,19 @@ const THINK_LABELS: Record<Tab, string> = {
   agent: "El agente está trabajando…",
 };
 
+const TAB_LABELS: Record<Tab, string> = {
+  image: "Imagen", video: "Video", music: "Música", code: "Código", agent: "Agente",
+};
+
+// Etiquetas en español con género/número correcto para placeholders y botones.
+const TAB_NOUN: Record<Tab, { article: string; singular: string; plural: string }> = {
+  image: { article: "la", singular: "imagen", plural: "imágenes" },
+  video: { article: "el", singular: "video",  plural: "videos" },
+  music: { article: "la", singular: "canción", plural: "canciones" },
+  code:  { article: "el", singular: "código", plural: "código" },
+  agent: { article: "la", singular: "tarea",  plural: "tareas" },
+};
+
 export default function StudioPage() {
   const [tab, setTab] = useState<Tab>("image");
   const [prompt, setPrompt] = useState("");
@@ -75,12 +88,12 @@ export default function StudioPage() {
       <div className="mb-4 flex gap-2">
         {TABS.map((t) => (
           <button key={t} onClick={() => { setTab(t); setResult(null); }}
-            className={`rounded-lg px-3 py-1 capitalize ${tab === t ? "bg-brand" : "bg-zinc-800"}`}>{t}</button>
+            className={`rounded-lg px-3 py-1 ${tab === t ? "bg-brand" : "bg-zinc-800"}`}>{TAB_LABELS[t]}</button>
         ))}
       </div>
 
       <div className="card space-y-3">
-        <textarea className="input h-24" placeholder={`Describe el/la ${tab} que quieres…`}
+        <textarea className="input h-24" placeholder={`Describe ${TAB_NOUN[tab].article} ${TAB_NOUN[tab].singular} que quieres…`}
           value={prompt} onChange={(e) => setPrompt(e.target.value)} />
         {multi && (
           <div className="flex items-center gap-3">
@@ -97,7 +110,7 @@ export default function StudioPage() {
           </div>
         )}
         <button className="btn" onClick={run} disabled={busy || !prompt}>
-          {busy ? "Generando…" : multi ? `Generar ${count} ${tab}(s)` : `Generar ${tab}`}
+          {busy ? "Generando…" : multi ? `Generar ${count} ${count === 1 ? TAB_NOUN[tab].singular : TAB_NOUN[tab].plural}` : `Generar ${TAB_NOUN[tab].singular}`}
         </button>
         {busy && <div className="pt-1"><Thinking label={THINK_LABELS[tab]} /></div>}
         {multi && !busy && <p className="text-xs text-zinc-500">Cada versión es diferente para que elijas la mejor.</p>}

@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from collections.abc import AsyncIterator
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,12 +12,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from mata.common.app_factory import create_app
 from mata.common.credits import authorize, settle
 from mata.common.db import SessionLocal, get_db
-from mata.common.deps import Identity, get_identity
+from mata.common.deps import Identity, get_identity, get_identity_optional
 from mata.common.models import Conversation, Message
 from mata.common.schemas import ChatRequest
 from mata.services.chat.providers import estimate_tokens, get_chat_provider
 
 app = create_app("Chat")
+
+# Guest funnel: a few free messages per IP before requiring sign-up. Kept in-memory
+# (best-effort, resets on restart) — enough to let new visitors try the product.
+GUEST_FREE_MESSAGES = 5
+_guest_usage: dict[str, int] = {}
 
 
 @app.get("/conversations")
@@ -59,11 +64,49 @@ async def _get_or_create_conversation(db: AsyncSession, user_id: str, conversati
 
 
 @app.post("/completions")
-async def completions(body: ChatRequest, identity: Identity = Depends(get_identity)):
-    """Streaming (SSE) or buffered chat completion. Credits settled on real token usage."""
+async def completions(
+    body: ChatRequest,
+    request: Request,
+    identity: Identity | None = Depends(get_identity_optional),
+):
+    """Streaming (SSE) or buffered chat completion. Credits settled on real token usage.
+
+    Guests (no token) get a small number of free messages per IP — no persistence,
+    no credit metering — then receive 401 so the client can prompt for sign-up.
+    """
     provider = get_chat_provider()
     messages = [m.model_dump() for m in body.messages]
     first_user = next((m["content"] for m in messages if m["role"] == "user"), "")
+
+    # ── Guest path: limited free messages, no DB, no credits ──────────────────
+    if identity is None:
+        fwd = request.headers.get("x-forwarded-for", "")
+        client_ip = fwd.split(",")[0].strip() or (request.client.host if request.client else "unknown")
+        used = _guest_usage.get(client_ip, 0)
+        if used >= GUEST_FREE_MESSAGES:
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Guest message limit reached")
+        _guest_usage[client_ip] = used + 1
+
+        async def run_guest() -> AsyncIterator[str]:
+            try:
+                async for delta in provider.stream(messages, body.model, body.temperature):
+                    yield f"data: {json.dumps({'delta': delta})}\n\n"
+            except Exception as exc:  # noqa: BLE001
+                yield f"data: {json.dumps({'error': str(exc)})}\n\n"
+                return
+            remaining = GUEST_FREE_MESSAGES - _guest_usage[client_ip]
+            yield f"data: {json.dumps({'done': True, 'guest_remaining': remaining})}\n\n"
+
+        if body.stream:
+            return StreamingResponse(run_guest(), media_type="text/event-stream")
+        chunks: list[str] = []
+        async for sse in run_guest():
+            payload = json.loads(sse.removeprefix("data: ").strip())
+            if "delta" in payload:
+                chunks.append(payload["delta"])
+            elif "error" in payload:
+                raise HTTPException(status.HTTP_502_BAD_GATEWAY, payload["error"])
+        return {"conversation_id": None, "content": "".join(chunks), "credits": 0}
 
     async def run() -> AsyncIterator[str]:
         async with SessionLocal() as db:

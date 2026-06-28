@@ -11,11 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from mata.common.app_factory import create_app
 from mata.common.config import settings
-from mata.common.credits import TIER_POLICY
+from mata.common.credits import CREDIT_PACKS, TIER_POLICY, grant_credits
 from mata.common.db import SessionLocal, get_db
 from mata.common.deps import Identity, get_identity
 from mata.common.models import Subscription, Tier, User
-from mata.common.schemas import CheckoutIn
+from mata.common.schemas import CheckoutIn, PayPalCaptureIn, PayPalOrderIn, PayPalSubscribeIn
+from mata.services.billing import paypal
 
 app = create_app("Billing")
 
@@ -80,6 +81,110 @@ async def checkout(body: CheckoutIn, identity: Identity = Depends(get_identity),
         cancel_url="http://localhost:3000/billing?status=cancel",
     )
     return {"mode": "stripe", "checkout_url": sess.url}
+
+
+# ── PayPal: subscriptions (recurring) + credit packs (one-time) ──────────────
+
+@app.get("/credit-packs")
+async def credit_packs():
+    """Public catalog of one-time credit packs."""
+    return {"paypal_enabled": settings.paypal_enabled, "packs": CREDIT_PACKS}
+
+
+@app.post("/paypal/subscribe")
+async def paypal_subscribe(body: PayPalSubscribeIn, identity: Identity = Depends(get_identity)):
+    """Start a recurring PayPal subscription. Returns the PayPal approval URL to redirect to."""
+    try:
+        result = await paypal.create_subscription(Tier(body.tier), identity.user_id)
+    except paypal.PayPalError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
+    if not result.get("approval_url"):
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "PayPal no devolvió una URL de aprobación.")
+    return result
+
+
+@app.post("/paypal/order")
+async def paypal_order(body: PayPalOrderIn, identity: Identity = Depends(get_identity)):
+    """Start a one-time PayPal order for a credit pack. Returns the approval URL."""
+    try:
+        result = await paypal.create_order(body.pack, identity.user_id)
+    except paypal.PayPalError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
+    if not result.get("approval_url"):
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "PayPal no devolvió una URL de aprobación.")
+    return result
+
+
+@app.post("/paypal/capture")
+async def paypal_capture(body: PayPalCaptureIn, identity: Identity = Depends(get_identity), db: AsyncSession = Depends(get_db)):
+    """Finalize an approved one-time order and credit the buyer's account."""
+    try:
+        result = await paypal.capture_order(body.order_id)
+    except paypal.PayPalError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
+    if result["status"] != "COMPLETED":
+        raise HTTPException(status.HTTP_402_PAYMENT_REQUIRED, "El pago no se completó.")
+    # Trust the user from the captured order's custom_id, but only credit the caller's own account.
+    if result["user_id"] != identity.user_id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "La orden no pertenece a este usuario.")
+    pack = CREDIT_PACKS.get(result["pack"] or "")
+    if not pack:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Paquete desconocido.")
+    await grant_credits(db, identity.user_id, pack["credits"])
+    return {"status": "completed", "credits_added": pack["credits"]}
+
+
+@app.post("/paypal/sync-subscription")
+async def paypal_sync_subscription(body: PayPalCaptureIn, identity: Identity = Depends(get_identity), db: AsyncSession = Depends(get_db)):
+    """Confirm a subscription right after the PayPal redirect and grant the tier.
+
+    Lets the upgrade take effect immediately without waiting on a webhook. `order_id`
+    here carries the PayPal subscription id.
+    """
+    try:
+        info = await paypal.get_subscription(body.order_id)
+    except paypal.PayPalError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
+    if info["status"] not in ("ACTIVE", "APPROVED"):
+        raise HTTPException(status.HTTP_402_PAYMENT_REQUIRED, "La suscripción aún no está activa.")
+    if info["user_id"] != identity.user_id or not info["tier"]:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "La suscripción no pertenece a este usuario.")
+    await _apply_tier(db, identity.user_id, info["tier"])
+    sub = (await db.execute(select(Subscription).where(Subscription.user_id == identity.user_id))).scalar_one_or_none()
+    if sub:
+        sub.stripe_subscription_id = body.order_id  # reuse column for the PayPal sub id
+    return {"status": "active", "tier": info["tier"].value}
+
+
+@app.post("/paypal/webhook")
+async def paypal_webhook(request: Request):
+    """Handle PayPal subscription lifecycle events (activation grants the tier)."""
+    body = await request.body()
+    if not await paypal.verify_webhook(dict(request.headers), body):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Webhook de PayPal no verificado.")
+    import json
+
+    event = json.loads(body)
+    etype = event.get("event_type", "")
+    resource = event.get("resource", {})
+
+    if etype == "BILLING.SUBSCRIPTION.ACTIVATED":
+        user_id = resource.get("custom_id")
+        tier = paypal.tier_for_plan_id(resource.get("plan_id", ""))
+        if user_id and tier:
+            async with SessionLocal() as db:
+                await _apply_tier(db, user_id, tier)
+                sub = (await db.execute(select(Subscription).where(Subscription.user_id == user_id))).scalar_one_or_none()
+                if sub:
+                    sub.stripe_subscription_id = resource.get("id")  # reuse column for the PayPal sub id
+                await db.commit()
+    elif etype in ("BILLING.SUBSCRIPTION.CANCELLED", "BILLING.SUBSCRIPTION.EXPIRED", "BILLING.SUBSCRIPTION.SUSPENDED"):
+        user_id = resource.get("custom_id")
+        if user_id:
+            async with SessionLocal() as db:
+                await _apply_tier(db, user_id, Tier.free)
+                await db.commit()
+    return {"received": True}
 
 
 @app.post("/webhook")

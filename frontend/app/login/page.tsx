@@ -44,7 +44,6 @@ export default function LoginPage() {
             Cerrar sesión
           </button>
         </div>
-        <p className="text-center text-white/25 text-xs mt-4">Admin: admin@mata.ai / admin12345</p>
       </div>
     </div>
   );
@@ -114,8 +113,6 @@ export default function LoginPage() {
             Al continuar aceptas los Términos de servicio de MATA AI
           </p>
         </div>
-
-        <p className="text-center text-white/20 text-xs mt-4">Admin demo: admin@mata.ai / admin12345</p>
       </div>
     </div>
   );

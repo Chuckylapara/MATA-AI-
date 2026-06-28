@@ -132,8 +132,27 @@ class StudioRenderIn(BaseModel):
     burn_subtitles: bool = False
     animate: bool = False           # AI image->video per scene (kie.ai)
     background_music: bool = False  # AI background track (kie.ai/Suno)
+    title: str | None = Field(default=None, max_length=200)  # for the history/panel
+
+
+class StudioThumbnailIn(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    style: str | None = None
+    aspect_ratio: str = Field(default="16:9", pattern="^(9:16|16:9|1:1)$")
 
 
 # --- Billing ---
 class CheckoutIn(BaseModel):
     tier: str = Field(pattern="^(pro|business)$")
+
+
+class PayPalSubscribeIn(BaseModel):
+    tier: str = Field(pattern="^(pro|business)$")
+
+
+class PayPalOrderIn(BaseModel):
+    pack: str = Field(pattern="^(small|medium|large)$")
+
+
+class PayPalCaptureIn(BaseModel):
+    order_id: str = Field(min_length=1, max_length=64)

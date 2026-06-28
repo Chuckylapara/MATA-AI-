@@ -21,10 +21,15 @@ type Scene = {
 type Board = { analysis: any; style_guide: any; escenas: Scene[]; provider?: string; aspect_ratio: string };
 
 const DURATIONS = [
-  { label: "Short · 30s", value: 30 },
-  { label: "Reel · 60s", value: 60 },
-  { label: "Medio · 3 min", value: 180 },
-  { label: "Largo · 10 min", value: 600 },
+  { label: "15s", value: 15 },
+  { label: "30s", value: 30 },
+  { label: "1 min", value: 60 },
+  { label: "3 min", value: 180 },
+  { label: "5 min", value: 300 },
+  { label: "10 min", value: 600 },
+  { label: "20 min", value: 1200 },
+  { label: "30 min", value: 1800 },
+  { label: "1 h", value: 3600 },
 ];
 const ASPECTS = [
   { label: "9:16 Vertical", value: "9:16" },
@@ -90,6 +95,91 @@ export default function CreatePage() {
   const [rendering, setRendering] = useState(false);
   const [video, setVideo] = useState<{ url: string; duration: number; resolution: string } | null>(null);
 
+  // Thumbnail (Paso 9 — SEO).
+  const [thumb, setThumb] = useState<string | null>(null);
+  const [thumbBusy, setThumbBusy] = useState(false);
+
+  // One-click "magic" mode: idea -> guion -> imágenes -> voz -> video, sin pasos manuales.
+  const [autoStage, setAutoStage] = useState<"guion" | "video" | null>(null);
+
+  async function autoCreate() {
+    if (idea.trim().length < 2) return;
+    setBusy(true); setError(""); setBoard(null);
+    setImages({}); setPicked({}); setAudio({}); setVideo(null); setThumb(null);
+    try {
+      setAutoStage("guion");
+      const b = await api.studioStoryboard({ idea, target_seconds: seconds, aspect_ratio: aspect });
+      setBoard(b);
+      setAutoStage("video");
+      setRendering(true);
+      const escenas = (b.escenas || []).map((s: Scene) => ({
+        numero: s.numero,
+        duracion_seg: s.duracion_seg,
+        narracion: s.narracion,
+        prompt: s.prompts?.principal,
+        style: styleString(b.style_guide),
+      }));
+      genThumbnail(b); // fire-and-forget: thumbnail in parallel with the render
+      const r = await api.studioRender({
+        escenas,
+        aspect_ratio: b.aspect_ratio,
+        resolution,
+        voice,
+        language: b.analysis?.idioma || "es",
+        burn_subtitles: burnSubs,
+        animate,
+        background_music: bgMusic,
+        title: b.analysis?.titulo,
+      });
+      setVideo({ url: API_BASE + r.url, duration: r.duration, resolution: r.resolution });
+    } catch (e: any) {
+      setError(e.message || "Error creando el video automático");
+    } finally {
+      setBusy(false); setRendering(false); setAutoStage(null);
+    }
+  }
+
+  async function genThumbnail(b: Board) {
+    if (!b?.analysis?.titulo) return;
+    setThumbBusy(true);
+    try {
+      const r = await api.studioThumbnail({
+        title: b.analysis.titulo,
+        style: styleString(b.style_guide),
+        aspect_ratio: b.aspect_ratio === "9:16" ? "9:16" : "16:9",
+      });
+      if (r.thumbnail) setThumb(r.thumbnail);
+    } catch { /* non-blocking */ } finally {
+      setThumbBusy(false);
+    }
+  }
+
+  function downloadScript() {
+    if (!board) return;
+    const a2 = board.analysis || {};
+    const lines: string[] = [];
+    lines.push(`${a2.titulo || "Guion"}\n${"=".repeat(40)}`);
+    if (a2.descripcion) lines.push(`\n${a2.descripcion}`);
+    if (a2.gancho) lines.push(`\nGancho: ${a2.gancho}`);
+    if (a2.hashtags?.length) lines.push(`Hashtags: ${a2.hashtags.join(" ")}`);
+    lines.push("");
+    for (const s of board.escenas || []) {
+      lines.push(`\nESCENA ${s.numero}  (${s.duracion_seg}s)\n${"-".repeat(30)}`);
+      lines.push(`Narración: ${s.narracion}`);
+      lines.push(`Visual: ${s.visual}`);
+      if (s.movimientos?.length) lines.push(`Cámara: ${s.movimientos.join(", ")}`);
+      if (s.emociones?.length) lines.push(`Emoción: ${s.emociones.join(", ")}`);
+      if (s.sonidos?.length) lines.push(`Sonidos: ${s.sonidos.join(", ")}`);
+      if (s.musica) lines.push(`Música: ${s.musica}`);
+    }
+    const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url; link.download = `guion-${(a2.titulo || "video").slice(0, 30).replace(/\s+/g, "-")}.txt`;
+    document.body.appendChild(link); link.click(); link.remove();
+    URL.revokeObjectURL(url);
+  }
+
   async function generate() {
     setBusy(true);
     setError("");
@@ -98,9 +188,11 @@ export default function CreatePage() {
     setPicked({});
     setAudio({});
     setVideo(null);
+    setThumb(null);
     try {
       const b = await api.studioStoryboard({ idea, target_seconds: seconds, aspect_ratio: aspect });
       setBoard(b);
+      genThumbnail(b);
     } catch (e: any) {
       setError(e.message || "Error generando el guion");
     } finally {
@@ -186,6 +278,7 @@ export default function CreatePage() {
         burn_subtitles: burnSubs,
         animate,
         background_music: bgMusic,
+        title: board.analysis?.titulo,
       });
       setVideo({ url: API_BASE + r.url, duration: r.duration, resolution: r.resolution });
     } catch (e: any) {
@@ -256,10 +349,26 @@ export default function CreatePage() {
             </select>
           </div>
         </div>
-        <button className="btn" onClick={generate} disabled={busy || idea.trim().length < 2}>
-          {busy ? "Generando guion…" : "✨ Generar guion"}
-        </button>
-        {busy && <div className="pt-1"><Thinking label="Analizando idea y escribiendo escenas…" /></div>}
+        <div className="flex flex-wrap items-center gap-3">
+          <button className="btn !px-6" onClick={autoCreate} disabled={busy || idea.trim().length < 2}>
+            {autoStage ? "Creando tu video…" : "⚡ Crear video automático"}
+          </button>
+          <button className="btn-glass !py-2 text-sm" onClick={generate} disabled={busy || idea.trim().length < 2}>
+            {busy && !autoStage ? "Generando guion…" : "Paso a paso"}
+          </button>
+          <span className="text-xs text-zinc-500">1 clic = idea → guion → imágenes → voz → video</span>
+        </div>
+        {busy && (
+          <div className="pt-1">
+            <Thinking label={
+              autoStage === "video"
+                ? "Montando el video: imágenes + voz + edición… (puede tardar varios minutos)"
+                : autoStage === "guion"
+                ? "Escribiendo el guion por escenas…"
+                : "Analizando idea y escribiendo escenas…"
+            } />
+          </div>
+        )}
         {error && <p className="text-sm text-red-400">⚠️ {error}</p>}
       </div>
 
@@ -289,6 +398,25 @@ export default function CreatePage() {
               ))}
             </div>
           )}
+
+          {/* Thumbnail (Paso 9) */}
+          <div className="mt-4">
+            <div className="mb-2 flex items-center gap-3">
+              <span className="text-sm font-semibold text-violet-300">🖼️ Miniatura</span>
+              {thumbBusy && <span className="text-xs text-zinc-500">generando…</span>}
+              {thumb && (
+                <button className="btn-glass !py-1 text-xs" onClick={() => download(thumb, "miniatura.jpg")}>
+                  ⬇ Descargar miniatura
+                </button>
+              )}
+              {!thumb && !thumbBusy && board && (
+                <button className="btn-glass !py-1 text-xs" onClick={() => genThumbnail(board)}>
+                  Generar miniatura
+                </button>
+              )}
+            </div>
+            {thumb && <img src={thumb} alt="miniatura" className="w-full max-w-md rounded-xl border border-white/10" />}
+          </div>
         </div>
       )}
 
@@ -306,6 +434,9 @@ export default function CreatePage() {
           </button>
           <button className="btn !py-1.5 text-sm" onClick={() => downloadSubs("vtt")} disabled={subBusy}>
             {subBusy ? "Generando…" : "⬇ .VTT"}
+          </button>
+          <button className="btn-glass !py-1.5 text-sm" onClick={downloadScript}>
+            ⬇ Guion (.txt)
           </button>
         </div>
       ) : null}

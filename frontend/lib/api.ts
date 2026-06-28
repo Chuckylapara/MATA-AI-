@@ -94,10 +94,20 @@ export const api = {
     burn_subtitles?: boolean;
     animate?: boolean;
     background_music?: boolean;
+    title?: string;
   }) => request("/studio/render", { method: "POST", body: JSON.stringify(body) }),
+  studioThumbnail: (body: { title: string; style?: string; aspect_ratio?: string }) =>
+    request("/studio/thumbnail", { method: "POST", body: JSON.stringify(body) }),
+  studioVideos: () => request("/studio/videos"),
   // billing
   tiers: () => request("/billing/tiers", {}, false),
   checkout: (tier: string) => request("/billing/checkout", { method: "POST", body: JSON.stringify({ tier }) }),
+  // billing — PayPal (subscriptions + one-time credit packs)
+  creditPacks: () => request("/billing/credit-packs", {}, false),
+  paypalSubscribe: (tier: string) => request("/billing/paypal/subscribe", { method: "POST", body: JSON.stringify({ tier }) }),
+  paypalOrder: (pack: string) => request("/billing/paypal/order", { method: "POST", body: JSON.stringify({ pack }) }),
+  paypalCapture: (order_id: string) => request("/billing/paypal/capture", { method: "POST", body: JSON.stringify({ order_id }) }),
+  paypalSyncSubscription: (order_id: string) => request("/billing/paypal/sync-subscription", { method: "POST", body: JSON.stringify({ order_id }) }),
   // admin
   adminOverview: () => request("/admin/overview"),
   adminUsers: () => request("/admin/users"),

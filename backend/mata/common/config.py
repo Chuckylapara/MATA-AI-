@@ -52,6 +52,24 @@ class Settings(BaseSettings):
     stripe_secret_key: str | None = None
     stripe_webhook_secret: str | None = None
 
+    # --- PayPal (subscriptions + one-time credit packs) ---
+    paypal_client_id: str | None = None
+    paypal_secret: str | None = None
+    paypal_env: str = "sandbox"          # "sandbox" while testing, "live" to charge real money
+    paypal_webhook_id: str | None = None  # from the PayPal app webhook config (verifies events)
+    paypal_plan_pro: str | None = None    # billing plan id created via scripts/paypal_setup.py
+    paypal_plan_business: str | None = None
+    # Public URL of the frontend, used for PayPal return/cancel redirects.
+    public_app_url: str = "http://localhost:3000"
+
+    @property
+    def paypal_api_base(self) -> str:
+        return "https://api-m.paypal.com" if self.paypal_env == "live" else "https://api-m.sandbox.paypal.com"
+
+    @property
+    def paypal_enabled(self) -> bool:
+        return bool(self.paypal_client_id and self.paypal_secret)
+
     # --- Default model ids ---
     chat_model: str = "claude-opus-4-8"
     code_model: str = "claude-opus-4-8"

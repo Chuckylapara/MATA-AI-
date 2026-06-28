@@ -7,6 +7,7 @@ import { memory } from "@/services/memory";
 
 type Me = { email: string; full_name: string | null; role: string; tier: string; credits: number };
 const TIER_LABEL: Record<string, string> = { free: "Free", pro: "Pro", business: "Business" };
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 const tools = [
   { href: "/avatar",           icon: "🎙", title: "Asistente en vivo", desc: "Habla por voz en tiempo real." },
@@ -24,12 +25,15 @@ export default function DashboardPage() {
   const [imageCount, setImageCount] = useState(0);
   const [memCount, setMemCount] = useState(0);
   const [loggedIn, setLoggedIn] = useState(true);
+  const [videos, setVideos] = useState<any[]>([]);
+  const [videoStats, setVideoStats] = useState<{ count: number; total_minutes: number }>({ count: 0, total_minutes: 0 });
 
   useEffect(() => {
     if (!getToken()) { setLoggedIn(false); return; }
     api.me().then(setMe).catch(() => setLoggedIn(false));
     api.tiers().then(setTiers).catch(() => {});
     api.listConversations().then((c: any[]) => setConvoCount(c.length)).catch(() => {});
+    api.studioVideos().then((v: any) => { setVideos(v.videos || []); setVideoStats({ count: v.count || 0, total_minutes: v.total_minutes || 0 }); }).catch(() => {});
     setImageCount(gallery.list().length);
     setMemCount(memory.list().length);
   }, []);
@@ -69,9 +73,9 @@ export default function DashboardPage() {
       {/* Stats row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 reveal">
         {[
-          { icon:"💬", label:"Conversaciones", val: convoCount, href:"/chat" },
-          { icon:"🎨", label:"Imágenes",        val: imageCount,  href:"/gallery" },
-          { icon:"🧠", label:"Memorias",        val: memCount },
+          { icon:"🎬", label:"Videos creados", val: videoStats.count,         href:"/create" },
+          { icon:"⏱️", label:"Minutos",         val: videoStats.total_minutes },
+          { icon:"🎨", label:"Imágenes",        val: imageCount,                href:"/gallery" },
           { icon:"💎", label:"Créditos",        val: me.credits.toLocaleString() },
         ].map(s => {
           const inner = (
@@ -128,6 +132,38 @@ export default function DashboardPage() {
           <p className="text-white/70 text-sm">🤖 {tierInfo.premium_models ? "Todos los modelos" : "Modelos base"}</p>
           <p className="text-white/70 text-sm">💎 {monthly.toLocaleString()} créditos/mes</p>
         </div>
+      </div>
+
+      {/* Mis videos — panel de control / historial */}
+      <div className="reveal mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-xs tracking-[0.25em] uppercase text-white/40">🎬 MIS VIDEOS</p>
+          <Link href="/create" className="btn text-xs px-4 py-1.5">＋ Crear video</Link>
+        </div>
+        {videos.length === 0 ? (
+          <div className="liquid-glass rounded-2xl p-8 text-center">
+            <div className="text-3xl mb-2">🎬</div>
+            <p className="text-white/50 text-sm">Aún no has creado videos. <Link href="/create" className="text-cyan-400 hover:underline">Crea el primero</Link> con una sola idea.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {videos.map((v) => (
+              <div key={v.id} className="liquid-glass rounded-2xl p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className={`w-2 h-2 rounded-full ${v.status === "succeeded" ? "bg-emerald-400" : v.status === "failed" ? "bg-red-400" : "bg-amber-400"}`} />
+                  <span className="text-white/40 text-[10px] uppercase tracking-wider">{v.status === "succeeded" ? "Listo" : v.status}</span>
+                  <span className="text-white/30 text-[10px] ml-auto">{v.resolution} · {v.aspect_ratio}</span>
+                </div>
+                <video src={API_BASE + v.url} controls className="w-full rounded-lg border border-white/10 mb-2" />
+                <p className="text-white text-sm font-medium truncate" title={v.title}>{v.title}</p>
+                <div className="flex items-center justify-between mt-1">
+                  <span className="text-white/40 text-xs">{v.duration}s</span>
+                  <a href={API_BASE + v.url} download className="text-cyan-400 hover:text-cyan-300 text-xs">⬇ Descargar</a>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Tools */}
