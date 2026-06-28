@@ -30,15 +30,10 @@ services:
         sync: false                # set in the Render dashboard (secret)
       - key: GEMINI_MODEL
         value: gemini-2.5-flash-lite
-      - key: KIE_API_KEY
-        sync: false                # kie.ai — set the value in the Render dashboard (secret)
-      # Optional extra providers (leave unset to use free fallbacks):
-      - key: OPENAI_API_KEY
-        sync: false
-      - key: ELEVENLABS_API_KEY
-        sync: false
-      - key: ELEVENLABS_VOICE_ID
-        sync: false
       - key: CORS_ORIGINS
         value: "https://mata-ai-236ad.web.app,https://mata-ai-backend.onrender.com"
         # Add more origins if needed (Vercel preview URLs, custom domain, etc.)
+    # Link the existing "MATA AI" env group (holds KIE_API_KEY and other secrets).
+    # Service-level vars above take precedence; the group only adds what's missing.
+    envVarGroups:
+      - "MATA AI"
