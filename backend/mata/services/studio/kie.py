@@ -109,6 +109,23 @@ async def image_to_video(prompt: str, image_url: str, duration: int = 5) -> str:
     return urls[0]
 
 
+async def generate_voice(text: str, voice: str | None = None, language: str | None = None) -> str:
+    """Premium narration via ElevenLabs (through kie). Returns a public audio URL."""
+    urls = await _poll_job(
+        await _create_task(
+            "elevenlabs/text-to-speech-multilingual-v2",
+            {
+                "text": text[:5000],
+                # kie expects an ElevenLabs voice id; fall back to a solid default narrator.
+                "voice": voice or settings.elevenlabs_voice_id or "EkK5I93UQWFDigLMpZcX",
+                "language_code": (language or "")[:5],
+            },
+        ),
+        max_wait=180,
+    )
+    return urls[0]
+
+
 async def generate_music(prompt: str, *, model: str = "V4_5") -> str:
     """Instrumental background track via Suno. Returns a public audio URL."""
     async with httpx.AsyncClient(timeout=60) as client:

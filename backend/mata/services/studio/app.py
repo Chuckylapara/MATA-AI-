@@ -82,27 +82,32 @@ async def scene_images(
     """
     reservation = await authorize(db, identity.user_id, "image", units=body.n)
     size = brain.aspect_to_size(body.aspect_ratio)
-    provider = get_image_provider()
-    used = getattr(provider, "name", "unknown")
     images: list[str] = []
-    try:
+    used = "none"
+    # Primary: kie.ai (Seedream) when configured.
+    if kie.kie_enabled():
+        try:
+            images = [await kie.generate_image(body.prompt, body.aspect_ratio) for _ in range(body.n)]
+            used = "kie"
+        except Exception:  # noqa: BLE001
+            images = []
+    # Fallback: configured provider, then free Pollinations.
+    if not images:
+        provider = get_image_provider()
+        used = getattr(provider, "name", "unknown")
         try:
             images = await provider.generate(body.prompt, size, body.n, body.style)
-        except Exception:  # noqa: BLE001 — degrade to the free provider
-            fallback = PollinationsImageProvider()
-            images = await fallback.generate(body.prompt, size, body.n, body.style)
-            used = fallback.name
-    except Exception:  # noqa: BLE001 — free provider failed too
-        if kie.kie_enabled():
+        except Exception:  # noqa: BLE001
             try:
-                images = [await kie.generate_image(body.prompt, body.aspect_ratio) for _ in range(body.n)]
-                used = "kie"
+                fallback = PollinationsImageProvider()
+                images = await fallback.generate(body.prompt, size, body.n, body.style)
+                used = fallback.name
             except Exception:  # noqa: BLE001
                 images = []
-        if not images:
-            await refund(db, reservation)
-            await db.commit()
-            return {"images": [], "provider": "none"}
+    if not images:
+        await refund(db, reservation)
+        await db.commit()
+        return {"images": [], "provider": "none"}
     await settle(db, reservation, reservation.amount, meta={"step": "scene-images", "n": body.n, "provider": used})
     await db.commit()
     return {"images": images, "provider": used}

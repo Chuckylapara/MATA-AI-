@@ -102,11 +102,29 @@ def _mock(text: str) -> str:
     return "data:audio/wav;base64," + base64.b64encode(header + data).decode()
 
 
+async def _url_to_data_url(url: str) -> str:
+    async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
+        resp = await client.get(url)
+        resp.raise_for_status()
+        return "data:audio/mpeg;base64," + base64.b64encode(resp.content).decode()
+
+
 async def synthesize(text: str, voice: str, language: str) -> tuple[str, str]:
-    """Return (data_url, provider_name). Degrades gracefully through the chain."""
+    """Return (data_url, provider_name). Degrades gracefully through the chain.
+
+    When kie.ai is configured it is preferred (premium ElevenLabs voice); otherwise
+    direct ElevenLabs/OpenAI keys, then free Google TTS, then a silent placeholder.
+    """
+    from mata.services.studio import kie
+
     text = text.strip()
     if not text:
         return _mock(text), "mock"
+    if kie.kie_enabled():
+        try:
+            return await _url_to_data_url(await kie.generate_voice(text, language=language)), "kie-elevenlabs"
+        except Exception:  # noqa: BLE001
+            pass
     if settings.elevenlabs_api_key and settings.elevenlabs_voice_id:
         try:
             return await _elevenlabs(text), "elevenlabs"

@@ -131,6 +131,13 @@ async def _ensure_image(scene: dict, aspect_ratio: str, work: Path, idx: int) ->
     public_url: str | None = None
 
     src = scene.get("image_url")
+    # Primary: kie.ai (Seedream) when configured — best quality, no rate limits.
+    if not src and kie.kie_enabled():
+        try:
+            src = await kie.generate_image(prompt, aspect_ratio)
+        except Exception:  # noqa: BLE001
+            src = None
+    # Otherwise the configured provider, then the free Pollinations fallback.
     if not src:
         try:
             src = (await get_image_provider().generate(prompt, size, 1, scene.get("style")))[0]
@@ -148,8 +155,8 @@ async def _ensure_image(scene: dict, aspect_ratio: str, work: Path, idx: int) ->
         except Exception:  # noqa: BLE001
             out.unlink(missing_ok=True)
 
-    # Backup: kie.ai image generation (reliable when free providers are down/limited).
-    if not out.exists() and kie.kie_enabled():
+    # Secondary kie attempt if the chosen source failed to download.
+    if not out.exists() and kie.kie_enabled() and not scene.get("image_url"):
         try:
             kurl = await kie.generate_image(prompt, aspect_ratio)
             await _save_source(kurl, out)
