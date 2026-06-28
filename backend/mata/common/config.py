@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     gemini_api_key: str | None = None
     openai_api_key: str | None = None
+    nvidia_api_key: str | None = None  # NVIDIA NIM (build.nvidia.com) — OpenAI-compatible, fast
     replicate_api_token: str | None = None
     elevenlabs_api_key: str | None = None
     elevenlabs_voice_id: str | None = None
@@ -75,6 +76,7 @@ class Settings(BaseSettings):
     code_model: str = "claude-opus-4-8"
     agent_model: str = "claude-opus-4-8"
     gemini_model: str = "gemini-2.5-flash"
+    nvidia_model: str = "meta/llama-3.1-70b-instruct"
 
     # --- CORS ---
     cors_origins: str = "http://localhost:3000"

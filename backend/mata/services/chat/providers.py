@@ -111,7 +111,58 @@ class GeminiChatProvider:
             yield word + " "
 
 
+class NvidiaChatProvider:
+    """NVIDIA NIM (build.nvidia.com) — OpenAI-compatible, fast hosted models."""
+    name = "nvidia"
+
+    async def stream(self, messages, model, temperature) -> AsyncIterator[str]:
+        import json
+
+        import httpx
+
+        payload = {
+            "model": model or settings.nvidia_model,
+            "messages": [{"role": m["role"], "content": m["content"]} for m in messages],
+            "temperature": temperature,
+            "max_tokens": 2048,
+            "stream": True,
+        }
+        headers = {"Authorization": f"Bearer {settings.nvidia_api_key}", "Accept": "text/event-stream"}
+        url = "https://integrate.api.nvidia.com/v1/chat/completions"
+        yielded = False
+        try:
+            async with httpx.AsyncClient(timeout=120) as client:
+                async with client.stream("POST", url, headers=headers, json=payload) as resp:
+                    if resp.status_code != 200:
+                        raise RuntimeError(f"nvidia status {resp.status_code}")
+                    async for line in resp.aiter_lines():
+                        if not line or not line.startswith("data:"):
+                            continue
+                        data = line[5:].strip()
+                        if not data or data == "[DONE]":
+                            continue
+                        try:
+                            obj = json.loads(data)
+                        except json.JSONDecodeError:
+                            continue
+                        delta = obj.get("choices", [{}])[0].get("delta", {}).get("content")
+                        if delta:
+                            yielded = True
+                            yield delta
+            if yielded:
+                return
+        except Exception:
+            if yielded:
+                return  # partial stream already delivered
+        # Fallback to the next best provider so chat never breaks.
+        fallback = GeminiChatProvider() if settings.gemini_api_key else MockChatProvider()
+        async for text in fallback.stream(messages, None, temperature):
+            yield text
+
+
 def get_chat_provider():
+    if settings.nvidia_api_key:
+        return NvidiaChatProvider()
     if settings.anthropic_api_key:
         return AnthropicChatProvider()
     if settings.gemini_api_key:

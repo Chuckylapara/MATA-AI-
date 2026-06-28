@@ -22,10 +22,12 @@ class LLMUnavailable(RuntimeError):
 
 
 def llm_available() -> bool:
-    return bool(settings.anthropic_api_key or settings.gemini_api_key)
+    return bool(settings.nvidia_api_key or settings.anthropic_api_key or settings.gemini_api_key)
 
 
 def active_provider() -> str:
+    if settings.nvidia_api_key:
+        return "nvidia"
     if settings.anthropic_api_key:
         return "anthropic"
     if settings.gemini_api_key:
@@ -73,6 +75,23 @@ async def _anthropic_json(system: str, prompt: str, temperature: float, max_toke
     return "".join(block.text for block in msg.content if getattr(block, "type", None) == "text")
 
 
+async def _nvidia_json(system: str, prompt: str, temperature: float, max_tokens: int) -> str:
+    import httpx
+
+    sys = system + "\n\nResponde ÚNICAMENTE con JSON válido, sin texto adicional ni explicaciones."
+    payload = {
+        "model": settings.nvidia_model,
+        "messages": [{"role": "system", "content": sys}, {"role": "user", "content": prompt}],
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
+    headers = {"Authorization": f"Bearer {settings.nvidia_api_key}"}
+    async with httpx.AsyncClient(timeout=120) as client:
+        resp = await client.post("https://integrate.api.nvidia.com/v1/chat/completions", headers=headers, json=payload)
+        resp.raise_for_status()
+        return resp.json()["choices"][0]["message"]["content"]
+
+
 async def _gemini_json(system: str, prompt: str, temperature: float) -> str:
     from mata.common.gemini import gemini_generate
 
@@ -92,10 +111,16 @@ async def generate_json(
 
     Raises LLMUnavailable if no provider key is configured.
     """
+    if settings.nvidia_api_key:
+        try:
+            raw = await _nvidia_json(system, prompt, temperature, max_tokens)
+            return _extract_json(raw)
+        except Exception:  # noqa: BLE001 — fall through to the next provider
+            pass
     if settings.anthropic_api_key:
         raw = await _anthropic_json(system, prompt, temperature, max_tokens)
         return _extract_json(raw)
     if settings.gemini_api_key:
         raw = await _gemini_json(system, prompt, temperature)
         return _extract_json(raw)
-    raise LLMUnavailable("No LLM provider configured (set ANTHROPIC_API_KEY or GEMINI_API_KEY)")
+    raise LLMUnavailable("No LLM provider configured (set NVIDIA_API_KEY, ANTHROPIC_API_KEY or GEMINI_API_KEY)")
