@@ -11,9 +11,11 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mata.common.app_factory import create_app
+from mata.common.config import settings
 from mata.common.credits import authorize, refund, settle
 from mata.common.db import get_db
 from mata.common.deps import Identity, get_identity
+from mata.common.llm import active_provider
 from mata.common.schemas import (
     StudioIdeaIn,
     StudioRenderIn,
@@ -26,6 +28,26 @@ from mata.services.image.providers import PollinationsImageProvider, get_image_p
 from mata.services.studio import brain, kie, render, subtitles, voice
 
 app = create_app("Studio")
+
+@app.get("/diag")
+async def diag(probe: bool = False, identity: Identity = Depends(get_identity)):
+    """Provider diagnostics (booleans only — never exposes key values).
+    Add ?probe=1 to attempt one real kie image call and return the raw error."""
+    out: dict = {
+        "kie_enabled": kie.kie_enabled(),
+        "gemini": bool(settings.gemini_api_key),
+        "openai": bool(settings.openai_api_key),
+        "elevenlabs": bool(settings.elevenlabs_api_key),
+        "llm_provider": active_provider(),
+    }
+    if probe and kie.kie_enabled():
+        try:
+            url = await kie.generate_image("a simple blue circle on white", "1:1")
+            out["kie_probe"] = {"ok": True, "url_prefix": url[:60]}
+        except Exception as exc:  # noqa: BLE001
+            out["kie_probe"] = {"ok": False, "error": str(exc)[:400]}
+    return out
+
 
 # Serve rendered .mp4 files. Public path is /studio/files/... through the gateway.
 app.mount("/files", StaticFiles(directory=str(render.OUTPUT_DIR)), name="files")
