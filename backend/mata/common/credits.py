@@ -17,6 +17,11 @@ CREDIT_COSTS = {
     "video": 200,     # per clip
     "music": 50,      # per track
     "agent": 10,      # per run (base) + per step
+    "studio_analyze": 1,      # idea -> metadata
+    "studio_storyboard": 5,   # idea -> full scene plan
+    "studio_voiceover": 2,    # per narration clip
+    "studio_subtitles": 1,    # per subtitle file
+    "studio_render": 30,      # per assembled mp4
 }
 
 # Tier policy: monthly credit grant + rate limit (requests/min).

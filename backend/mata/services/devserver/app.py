@@ -30,6 +30,7 @@ from mata.services.code.app import app as code_app
 from mata.services.image.app import app as image_app
 from mata.services.music.app import app as music_app
 from mata.services.music.providers import run_music
+from mata.services.studio.app import app as studio_app
 from mata.services.video.app import app as video_app
 from mata.services.video.providers import run_video
 
@@ -43,6 +44,7 @@ _MOUNTS = {
     "/agent": agent_app,
     "/billing": billing_app,
     "/admin": admin_app,
+    "/studio": studio_app,
 }
 
 _worker_tasks: list[asyncio.Task] = []

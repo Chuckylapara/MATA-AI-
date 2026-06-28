@@ -1,55 +1,36 @@
 import "./globals.css";
 import type { Metadata } from "next";
-import { Orbitron, Rajdhani } from "next/font/google";
-import Link from "next/link";
+import NavBar from "@/components/NavBar";
 import Background from "@/components/Background";
 import WelcomeVoice from "@/components/WelcomeVoice";
 import ScrollReveal from "@/components/ScrollReveal";
 
-const display = Orbitron({ subsets: ["latin"], weight: ["500", "700", "900"], variable: "--font-display" });
-const body = Rajdhani({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-body" });
-
 export const metadata: Metadata = {
   title: "MATA AI · Plataforma de Inteligencia Artificial",
-  description: "Chat, voz, imágenes, video, música, código y agentes — todo en una sola plataforma futurista.",
+  description: "Chat, voz, imágenes, video, música, código y agentes — todo en una sola plataforma.",
 };
-
-const links = [
-  { href: "/", label: "Inicio" },
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/avatar", label: "En vivo" },
-  { href: "/chat", label: "Chat" },
-  { href: "/studio", label: "Studio" },
-  { href: "/gallery", label: "Galería" },
-  { href: "/billing", label: "Planes" },
-  { href: "/admin", label: "Admin" },
-];
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" className={`${display.variable} ${body.variable}`}>
+    <html lang="es">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500&family=Source+Serif+4:ital,wght@0,300;0,400;1,300;1,400&display=swap"
+          rel="stylesheet"
+        />
+      </head>
       <body>
         <Background />
         <WelcomeVoice />
         <ScrollReveal />
-        <nav className="sticky top-0 z-50 flex items-center gap-5 border-b border-white/10 bg-black/30 px-6 py-3 backdrop-blur-xl">
-          <Link href="/" className="font-display text-xl font-extrabold neon-text">
-            MATA&nbsp;AI
-          </Link>
-          <div className="ml-auto flex items-center gap-5">
-            {links.slice(1).map((l) => (
-              <Link key={l.href} href={l.href} className="nav-link">
-                {l.label}
-              </Link>
-            ))}
-            <Link href="/login" className="btn !px-4 !py-1.5 text-sm">
-              Cuenta
-            </Link>
-          </div>
-        </nav>
-        <main className="relative z-10 mx-auto max-w-6xl p-6">{children}</main>
-        <footer className="relative z-10 mt-16 border-t border-white/10 py-6 text-center text-xs text-zinc-500">
-          MATA AI © 2026 · Plataforma modular de inteligencia artificial
+        <NavBar />
+        <main className="relative z-10 pt-20 sm:pt-22 pb-16 min-h-screen">{children}</main>
+        <footer className="relative z-10 border-t border-white/[0.06] py-8 text-center">
+          <span className="text-xs text-white/25 tracking-widest uppercase">
+            MATA AI © 2026 &nbsp;·&nbsp; Plataforma modular de inteligencia artificial
+          </span>
         </footer>
       </body>
     </html>

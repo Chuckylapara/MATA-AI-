@@ -92,6 +92,48 @@ class JobOut(BaseModel):
     error: str | None = None
 
 
+# --- Viral AI Studio ---
+class StudioIdeaIn(BaseModel):
+    idea: str = Field(min_length=2, max_length=2000)
+
+
+class StudioStoryboardIn(BaseModel):
+    idea: str = Field(min_length=2, max_length=2000)
+    analysis: dict | None = None  # reuse a prior /analyze result to save a call
+    target_seconds: int = Field(default=45, ge=10, le=7200)
+    aspect_ratio: str = Field(default="9:16", pattern="^(9:16|16:9|1:1)$")
+
+
+class StudioSceneImagesIn(BaseModel):
+    prompt: str = Field(min_length=1, max_length=4000)
+    n: int = Field(default=1, ge=1, le=4)
+    aspect_ratio: str = Field(default="9:16", pattern="^(9:16|16:9|1:1)$")
+    style: str | None = None
+
+
+class StudioVoiceoverIn(BaseModel):
+    text: str = Field(min_length=1, max_length=5000)
+    voice: str = Field(default="narrador")
+    language: str = Field(default="es", max_length=10)
+
+
+class StudioSubtitlesIn(BaseModel):
+    escenas: list[dict] = Field(min_length=1)
+    fmt: str = Field(default="srt", pattern="^(srt|vtt)$")
+    language: str | None = None  # translate to this language; None = original
+
+
+class StudioRenderIn(BaseModel):
+    escenas: list[dict] = Field(min_length=1, max_length=60)
+    aspect_ratio: str = Field(default="9:16", pattern="^(9:16|16:9|1:1)$")
+    resolution: str = Field(default="1080p", pattern="^(720p|1080p)$")
+    voice: str = Field(default="narrador")
+    language: str = Field(default="es", max_length=10)
+    burn_subtitles: bool = False
+    animate: bool = False           # AI image->video per scene (kie.ai)
+    background_music: bool = False  # AI background track (kie.ai/Suno)
+
+
 # --- Billing ---
 class CheckoutIn(BaseModel):
     tier: str = Field(pattern="^(pro|business)$")

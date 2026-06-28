@@ -76,6 +76,10 @@ services:
     <<: *backend
     environment: { SERVICE: admin, PORT: 8009 }
 
+  studio:
+    <<: *backend
+    environment: { SERVICE: studio, PORT: 8010 }
+
   # --- Async generation workers ---
   video-worker:
     <<: *backend

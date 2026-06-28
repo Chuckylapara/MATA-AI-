@@ -1,74 +1,219 @@
+"use client";
 import Link from "next/link";
 
 const modules = [
-  { href: "/avatar", icon: "🤖", title: "Asistente en vivo", desc: "Habla por voz con Mata en tiempo real, como una persona." },
-  { href: "/chat", icon: "💬", title: "Chat Inteligente", desc: "Conversación natural en streaming con IA real." },
-  { href: "/studio?tab=image", icon: "🎨", title: "Generador de Imágenes", desc: "Crea fotos con IA a partir de texto." },
-  { href: "/studio?tab=video", icon: "🎬", title: "Generador de Video", desc: "Texto a video con arquitectura de jobs async." },
-  { href: "/studio?tab=music", icon: "🎵", title: "Generador de Música", desc: "Composición musical desde una descripción." },
-  { href: "/studio?tab=code", icon: "⚡", title: "Generador de Código", desc: "Genera, explica, revisa y corrige código." },
-  { href: "/studio?tab=agent", icon: "🧠", title: "Agente Autónomo", desc: "Automatiza tareas usando herramientas y APIs." },
-  { href: "/billing", icon: "🚀", title: "Planes", desc: "Freemium y premium con motor de créditos." },
+  { href: "/avatar",          icon: "🎙", label: "Asistente en vivo",      desc: "Habla por voz con Mata en tiempo real." },
+  { href: "/chat",            icon: "💬", label: "Chat Inteligente",        desc: "Conversación natural en streaming con IA." },
+  { href: "/studio?tab=image",icon: "🎨", label: "Generador de Imágenes",   desc: "Crea fotos con IA a partir de texto." },
+  { href: "/studio?tab=video",icon: "🎬", label: "Generador de Video",      desc: "Texto a video con arquitectura async." },
+  { href: "/studio?tab=music",icon: "🎵", label: "Generador de Música",     desc: "Composición musical desde una descripción." },
+  { href: "/studio?tab=code", icon: "⚡", label: "Generador de Código",     desc: "Genera, explica y corrige código." },
+  { href: "/studio?tab=agent",icon: "🧠", label: "Agente Autónomo",         desc: "Automatiza tareas usando herramientas." },
+  { href: "/billing",         icon: "🚀", label: "Planes",                  desc: "Freemium y premium con motor de créditos." },
 ];
+
+const stats = [
+  { num: "8+",   label: "Módulos de IA" },
+  { num: "∞",    label: "Conversaciones" },
+  { num: "100%", label: "API-first" },
+  { num: "3D",   label: "Experiencia" },
+];
+
+const pills = ["Voz en vivo", "IA generativa", "Agentes autónomos", "Multimodal"];
 
 export default function Home() {
   return (
-    <div>
-      {/* HERO */}
-      <section className="flex flex-col items-center py-16 text-center">
-        <span className="mb-6 rounded-full border border-cyan-400/30 bg-cyan-400/10 px-4 py-1 text-xs font-semibold tracking-widest text-cyan-300">
-          ◆ PLATAFORMA DE INTELIGENCIA ARTIFICIAL ◆
-        </span>
-        <div className="logo3d-wrap">
-          <h1 className="logo3d">MATA AI</h1>
+    <div className="min-h-screen">
+
+      {/* ── HERO ──────────────────────────────────────────── */}
+      <section className="relative flex flex-col lg:flex-row min-h-[calc(100vh-96px)] px-4 lg:px-8 gap-6 pb-8">
+
+        {/* Ambient orbs */}
+        <div className="orb w-[600px] h-[600px] bg-purple-600/20 -top-40 -left-20 pointer-events-none" style={{position:'absolute'}} />
+        <div className="orb w-[400px] h-[400px] bg-cyan-500/15 top-20 right-10 pointer-events-none" style={{position:'absolute', animationDelay:'4s'}} />
+        <div className="orb w-[300px] h-[300px] bg-pink-500/10 bottom-20 left-1/3 pointer-events-none" style={{position:'absolute', animationDelay:'8s'}} />
+
+        {/* ─ Left Panel ─ */}
+        <div className="relative flex-1 flex flex-col min-h-[70vh] lg:min-h-0">
+          {/* Glass overlay */}
+          <div className="liquid-glass-strong absolute inset-0 rounded-[2rem]" />
+
+          <div className="relative z-10 flex flex-col h-full p-8 lg:p-10">
+
+            {/* Top badge */}
+            <div className="flex items-center justify-between">
+              <span className="pill">
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                PLATAFORMA DE IA
+              </span>
+              <span className="pill">v2.0 · 2026</span>
+            </div>
+
+            {/* Hero center */}
+            <div className="flex-1 flex flex-col items-start justify-center mt-10">
+              {/* Logo mark */}
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-600 via-purple-700 to-cyan-600 flex items-center justify-center mb-8 shadow-2xl shadow-violet-500/40">
+                <span className="text-white font-bold text-3xl" style={{fontFamily:'Poppins'}}>M</span>
+              </div>
+
+              {/* Headline */}
+              <h1 className="font-display font-semibold text-5xl lg:text-6xl xl:text-7xl leading-[1.1] tracking-[-0.04em] text-white mb-6">
+                El futuro de<br />
+                <em className="font-serif not-italic" style={{color:'rgba(255,255,255,0.7)', fontFamily:"'Source Serif 4', Georgia, serif", fontStyle:'italic'}}>
+                  la inteligencia
+                </em>{" "}
+                artificial
+              </h1>
+
+              <p className="text-white/60 text-base lg:text-lg font-light leading-relaxed max-w-md mb-10">
+                Voz, chat, imágenes, video, música, código y agentes&nbsp;—
+                todo en una sola plataforma diseñada para el futuro.
+              </p>
+
+              {/* CTA */}
+              <div className="flex flex-wrap gap-4 mb-10">
+                <Link href="/avatar" className="btn text-sm px-7 py-3">
+                  <span>🎤</span> Hablar con Mata
+                </Link>
+                <Link href="/studio" className="btn-glass text-sm px-7 py-3">
+                  ✨ Crear ahora
+                </Link>
+              </div>
+
+              {/* Capability pills */}
+              <div className="flex flex-wrap gap-2">
+                {pills.map(p => (
+                  <span key={p} className="pill">{p}</span>
+                ))}
+              </div>
+            </div>
+
+            {/* Bottom quote */}
+            <div className="mt-10 pt-8 border-t border-white/[0.07]">
+              <p className="text-[10px] tracking-[0.25em] uppercase text-white/40 mb-2">VISIÓN MATA AI</p>
+              <p className="text-white/70 text-sm leading-relaxed">
+                "Imaginamos un mundo donde{" "}
+                <em className="font-serif text-white/90" style={{fontFamily:"'Source Serif 4', serif", fontStyle:'italic'}}>
+                  la IA habla, crea y actúa
+                </em>{" "}
+                como tú lo necesitas."
+              </p>
+              <div className="flex items-center gap-3 mt-3">
+                <div className="flex-1 h-px bg-white/10" />
+                <span className="text-[10px] tracking-[0.2em] uppercase text-white/35">MATA AI TEAM</span>
+                <div className="flex-1 h-px bg-white/10" />
+              </div>
+            </div>
+          </div>
         </div>
-        <p className="font-display mt-6 max-w-2xl text-lg text-zinc-300">
-          El futuro de la IA, todo en un solo lugar:{" "}
-          <span className="neon-text font-bold">voz, chat, imágenes, video, música, código y agentes.</span>
-        </p>
-        <div className="mt-8 flex flex-wrap justify-center gap-4">
-          <Link href="/avatar" className="btn text-base">🎤 Hablar con Mata</Link>
-          <Link href="/studio" className="btn text-base" style={{ background: "linear-gradient(110deg,#ec4899,#a855f7)" }}>
-            ✨ Crear ahora
-          </Link>
+
+        {/* ─ Right Panel (desktop only) ─ */}
+        <div className="hidden lg:flex flex-col w-[44%] gap-4">
+
+          {/* Stats row */}
+          <div className="grid grid-cols-2 gap-4">
+            {stats.map(s => (
+              <div key={s.label} className="liquid-glass-strong rounded-2xl p-5 text-center reveal">
+                <div className="neon-text font-display font-semibold text-3xl mb-1">{s.num}</div>
+                <div className="text-white/45 text-xs tracking-widest uppercase">{s.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Feature cards */}
+          <div className="liquid-glass-strong rounded-[2rem] p-5 flex flex-col gap-4 flex-1 reveal">
+            <p className="text-xs tracking-widest uppercase text-white/40 px-1">CAPACIDADES</p>
+
+            <div className="grid grid-cols-2 gap-3 flex-1">
+              {[
+                { icon:"🎙", name:"Voz Neural",    desc:"Lip sync en tiempo real con IA" },
+                { icon:"🧠", name:"Agentes",       desc:"Automatización autónoma de tareas" },
+                { icon:"🎨", name:"Creación",      desc:"Imágenes, video y música con IA" },
+                { icon:"💬", name:"Chat Pro",      desc:"Streaming con memoria contextual" },
+              ].map(c => (
+                <div key={c.name} className="glass-neon rounded-2xl p-4 flex flex-col gap-2">
+                  <div className="text-2xl">{c.icon}</div>
+                  <div className="text-white font-medium text-sm">{c.name}</div>
+                  <div className="text-white/45 text-xs leading-relaxed">{c.desc}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Bottom CTA card */}
+            <div className="liquid-glass rounded-2xl p-5 flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500/30 to-cyan-500/30 flex items-center justify-center text-2xl shrink-0">
+                🚀
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-white font-medium text-sm">Empieza gratis</div>
+                <div className="text-white/45 text-xs mt-0.5">Sin tarjeta de crédito requerida</div>
+              </div>
+              <Link href="/billing" className="btn-glass text-xs px-4 py-2 shrink-0">Ver planes</Link>
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* MODULES */}
-      <section className="py-8" style={{ perspective: "1200px" }}>
-        <h2 className="font-display mb-8 text-center text-2xl font-bold tracking-widest text-zinc-200">
-          MÓDULOS
-        </h2>
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+      {/* ── MÓDULOS ────────────────────────────────────────── */}
+      <section className="px-4 lg:px-8 py-16">
+        <div className="flex items-end justify-between mb-10">
+          <div>
+            <p className="text-xs tracking-[0.25em] uppercase text-white/40 mb-2">PLATAFORMA COMPLETA</p>
+            <h2 className="font-display font-semibold text-3xl lg:text-4xl text-white tracking-tight">
+              Todos los módulos
+            </h2>
+          </div>
+          <Link href="/studio" className="pill hidden md:inline-flex">Ver todos →</Link>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {modules.map((m, i) => (
             <Link
-              key={m.href + m.title}
+              key={m.href + m.label}
               href={m.href}
-              className="card tilt reveal block"
-              style={{ transitionDelay: `${i * 70}ms` }}
+              className="card tilt reveal block group"
+              style={{ transitionDelay: `${i * 60}ms` }}
             >
-              <div className="mb-3 text-3xl">{m.icon}</div>
-              <h3 className="font-display text-lg font-bold text-white">{m.title}</h3>
-              <p className="mt-1 text-sm text-zinc-400">{m.desc}</p>
+              {/* Icon */}
+              <div className="w-12 h-12 rounded-xl bg-white/[0.07] flex items-center justify-center text-2xl mb-4
+                              group-hover:scale-110 transition-transform duration-300">
+                {m.icon}
+              </div>
+              <h3 className="font-display font-medium text-white text-base mb-1.5">{m.label}</h3>
+              <p className="text-white/45 text-xs leading-relaxed">{m.desc}</p>
+
+              {/* Arrow */}
+              <div className="mt-4 text-white/25 group-hover:text-cyan-400 transition-colors text-xs tracking-wider">
+                Abrir →
+              </div>
             </Link>
           ))}
         </div>
       </section>
 
-      {/* STATS */}
-      <section className="reveal mt-12 grid grid-cols-2 gap-4 md:grid-cols-4">
-        {[
-          ["8", "Módulos de IA"],
-          ["∞", "Conversaciones"],
-          ["100%", "API-first"],
-          ["3D", "Experiencia"],
-        ].map(([n, l]) => (
-          <div key={l} className="glass p-5 text-center">
-            <div className="neon-text font-display text-3xl font-extrabold">{n}</div>
-            <div className="mt-1 text-xs uppercase tracking-widest text-zinc-400">{l}</div>
+      {/* ── BOTTOM CTA ─────────────────────────────────────── */}
+      <section className="px-4 lg:px-8 py-8">
+        <div className="liquid-glass-strong rounded-[2rem] p-10 lg:p-16 text-center relative overflow-hidden">
+          {/* bg glow */}
+          <div className="absolute inset-0 bg-gradient-to-br from-violet-600/10 via-transparent to-cyan-600/10 pointer-events-none" />
+
+          <p className="text-xs tracking-[0.3em] uppercase text-white/40 mb-4 relative z-10">ÚNETE AHORA</p>
+          <h2 className="font-display font-semibold text-4xl lg:text-5xl text-white tracking-tight mb-4 relative z-10">
+            Crea sin{" "}
+            <em className="font-serif" style={{fontFamily:"'Source Serif 4', serif", fontStyle:'italic', color:'rgba(255,255,255,0.75)'}}>
+              límites
+            </em>
+          </h2>
+          <p className="text-white/50 text-base max-w-md mx-auto mb-10 relative z-10">
+            Accede a todos los módulos de IA en una plataforma unificada, diseñada para creadores del futuro.
+          </p>
+          <div className="flex flex-wrap justify-center gap-4 relative z-10">
+            <Link href="/login" className="btn px-10 py-3.5 text-base">Comenzar gratis</Link>
+            <Link href="/dashboard" className="btn-glass px-8 py-3.5 text-base">Ver dashboard</Link>
           </div>
-        ))}
+        </div>
       </section>
+
     </div>
   );
 }

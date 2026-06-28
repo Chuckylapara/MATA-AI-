@@ -39,12 +39,16 @@ class Settings(BaseSettings):
     agent_service_url: str = "http://agent:8007"
     billing_service_url: str = "http://billing:8008"
     admin_service_url: str = "http://admin:8009"
+    studio_service_url: str = "http://studio:8010"
 
     # --- Provider keys (optional — mock providers used when absent) ---
     anthropic_api_key: str | None = None
     gemini_api_key: str | None = None
     openai_api_key: str | None = None
     replicate_api_token: str | None = None
+    elevenlabs_api_key: str | None = None
+    elevenlabs_voice_id: str | None = None
+    kie_api_key: str | None = None  # kie.ai — backup for images/video/music
     stripe_secret_key: str | None = None
     stripe_webhook_secret: str | None = None
 

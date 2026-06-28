@@ -74,6 +74,27 @@ export const api = {
   musicSubmit: (body: any) => request("/music/jobs", { method: "POST", body: JSON.stringify(body) }),
   musicPoll: (id: string) => request(`/music/jobs/${id}`),
   agentRun: (body: any) => request("/agent/runs", { method: "POST", body: JSON.stringify(body) }),
+  // Viral AI Studio (idea -> analysis -> storyboard -> per-scene images)
+  studioAnalyze: (idea: string) =>
+    request("/studio/analyze", { method: "POST", body: JSON.stringify({ idea }) }),
+  studioStoryboard: (body: { idea: string; analysis?: any; target_seconds: number; aspect_ratio: string }) =>
+    request("/studio/storyboard", { method: "POST", body: JSON.stringify(body) }),
+  studioSceneImages: (body: { prompt: string; n: number; aspect_ratio: string; style?: string }) =>
+    request("/studio/scene-images", { method: "POST", body: JSON.stringify(body) }),
+  studioVoiceover: (body: { text: string; voice?: string; language?: string }) =>
+    request("/studio/voiceover", { method: "POST", body: JSON.stringify(body) }),
+  studioSubtitles: (body: { escenas: any[]; fmt: string; language?: string | null }) =>
+    request("/studio/subtitles", { method: "POST", body: JSON.stringify(body) }),
+  studioRender: (body: {
+    escenas: any[];
+    aspect_ratio: string;
+    resolution: string;
+    voice?: string;
+    language?: string;
+    burn_subtitles?: boolean;
+    animate?: boolean;
+    background_music?: boolean;
+  }) => request("/studio/render", { method: "POST", body: JSON.stringify(body) }),
   // billing
   tiers: () => request("/billing/tiers", {}, false),
   checkout: (tier: string) => request("/billing/checkout", { method: "POST", body: JSON.stringify({ tier }) }),
@@ -94,19 +115,28 @@ export async function streamChat(
   onDelta: (text: string) => void,
   signal?: AbortSignal,
 ): Promise<string | null> {
+  const buildHeaders = () => {
+    const h: Record<string, string> = { "Content-Type": "application/json" };
+    const t = getToken();
+    if (t) h["Authorization"] = `Bearer ${t}`;
+    return h;
+  };
   const send = () =>
     fetch(`${API}/chat/completions`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken()}` },
+      headers: buildHeaders(),
       body: JSON.stringify({ messages, conversation_id: conversationId, stream: true }),
       signal,
     });
   let res = await send();
   // Access token expired → refresh once and retry.
-  if (res.status === 401 && (await refreshTokens())) {
+  if (res.status === 401 && getToken() && (await refreshTokens())) {
     res = await send();
   }
-  if (!res.ok || !res.body) throw new Error(`Chat failed: ${res.status}`);
+  if (!res.ok || !res.body) {
+    if (res.status === 401) throw new Error("GUEST_LIMIT");
+    throw new Error(`Chat failed: ${res.status}`);
+  }
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let convId: string | null = conversationId;

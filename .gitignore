@@ -11,10 +11,14 @@ out/
 
 # Env / secrets
 .env
+.env.production
 *.local
 
 # Databases
 *.db
+
+# Rendered videos (generated at runtime)
+backend/_renders/
 
 # Firebase
 .firebase/
@@ -22,3 +26,4 @@ out/
 # OS
 .DS_Store
 Thumbs.db
+frontend/tsconfig.tsbuildinfo

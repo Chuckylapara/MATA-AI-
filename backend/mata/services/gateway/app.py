@@ -33,6 +33,7 @@ SERVICE_MAP = {
     "agent": (settings.agent_service_url, True),
     "billing": (settings.billing_service_url, True),
     "admin": (settings.admin_service_url, True),
+    "studio": (settings.studio_service_url, True),
 }
 
 # Auth routes that don't need a token.

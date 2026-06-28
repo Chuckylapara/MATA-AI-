@@ -6,8 +6,16 @@ import { gallery } from "@/services/storage";
 import { memory } from "@/services/memory";
 
 type Me = { email: string; full_name: string | null; role: string; tier: string; credits: number };
-
 const TIER_LABEL: Record<string, string> = { free: "Free", pro: "Pro", business: "Business" };
+
+const tools = [
+  { href: "/avatar",           icon: "🎙", title: "Asistente en vivo", desc: "Habla por voz en tiempo real." },
+  { href: "/chat",             icon: "💬", title: "Chat AI",            desc: "Conversación inteligente con memoria." },
+  { href: "/studio?tab=image", icon: "🎨", title: "Imágenes",           desc: "Genera arte con IA." },
+  { href: "/studio?tab=video", icon: "🎬", title: "Video",              desc: "Texto a video (beta)." },
+  { href: "/studio?tab=code",  icon: "⚡", title: "Código",             desc: "Genera y corrige código." },
+  { href: "/studio?tab=agent", icon: "🧠", title: "Agente",             desc: "Automatiza tareas." },
+];
 
 export default function DashboardPage() {
   const [me, setMe] = useState<Me | null>(null);
@@ -18,10 +26,7 @@ export default function DashboardPage() {
   const [loggedIn, setLoggedIn] = useState(true);
 
   useEffect(() => {
-    if (!getToken()) {
-      setLoggedIn(false);
-      return;
-    }
+    if (!getToken()) { setLoggedIn(false); return; }
     api.me().then(setMe).catch(() => setLoggedIn(false));
     api.tiers().then(setTiers).catch(() => {});
     api.listConversations().then((c: any[]) => setConvoCount(c.length)).catch(() => {});
@@ -29,108 +34,120 @@ export default function DashboardPage() {
     setMemCount(memory.list().length);
   }, []);
 
-  if (!loggedIn) {
-    return (
-      <div className="card mx-auto max-w-md text-center">
-        <h1 className="font-display text-2xl font-bold">Tu Dashboard</h1>
-        <p className="mt-2 text-zinc-400">Inicia sesión para ver tu uso, plan y estadísticas.</p>
-        <Link href="/login" className="btn mt-4 inline-block">Iniciar sesión</Link>
+  if (!loggedIn) return (
+    <div className="max-w-md mx-auto px-4 pt-8">
+      <div className="liquid-glass-strong rounded-[1.75rem] p-10 text-center">
+        <div className="text-4xl mb-4">🔐</div>
+        <h1 className="font-display font-semibold text-2xl text-white mb-2">Tu Dashboard</h1>
+        <p className="text-white/45 text-sm mb-8">Inicia sesión para ver tu uso, plan y estadísticas.</p>
+        <Link href="/login" className="btn px-8 py-3 inline-block">Iniciar sesión</Link>
       </div>
-    );
-  }
+    </div>
+  );
 
-  if (!me) return <p className="text-zinc-500">Cargando tu panel…</p>;
+  if (!me) return (
+    <div className="flex items-center justify-center h-64">
+      <div className="dots"><span/><span/><span/></div>
+    </div>
+  );
 
   const tierInfo = tiers[me.tier] || {};
   const monthly = tierInfo.monthly_credits || 100;
   const used = Math.max(0, monthly - me.credits);
   const pct = Math.min(100, Math.round((used / monthly) * 100));
 
-  const stat = (icon: string, label: string, value: any, href?: string) => {
-    const inner = (
-      <div className="card reveal tilt h-full">
-        <div className="text-2xl">{icon}</div>
-        <div className="mt-2 text-3xl font-bold neon-text font-display">{value}</div>
-        <div className="text-xs uppercase tracking-widest text-zinc-400">{label}</div>
-      </div>
-    );
-    return href ? <Link href={href}>{inner}</Link> : inner;
-  };
-
   return (
-    <div>
-      <header className="mb-8 reveal">
-        <p className="text-sm text-zinc-400">Bienvenido de nuevo,</p>
-        <h1 className="font-display text-3xl font-bold">{me.full_name || me.email}</h1>
-      </header>
+    <div className="px-4 lg:px-8 max-w-6xl mx-auto">
+      {/* Header */}
+      <div className="mb-10 reveal">
+        <p className="text-white/40 text-sm tracking-wide mb-1">Bienvenido de vuelta,</p>
+        <h1 className="font-display font-semibold text-4xl text-white tracking-tight">
+          {me.full_name || me.email.split("@")[0]}
+        </h1>
+      </div>
 
-      {/* Plan + credits */}
-      <section className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <div className="card reveal lg:col-span-2">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-widest text-zinc-400">Plan actual</p>
-              <p className="font-display text-2xl font-bold">
-                {TIER_LABEL[me.tier] || me.tier}{" "}
-                <span className={`ml-2 rounded-full px-2 py-0.5 text-xs ${me.tier === "free" ? "bg-zinc-700" : "bg-emerald-500/30 text-emerald-300"}`}>
-                  {me.tier === "free" ? "Gratis" : "Premium"}
-                </span>
-              </p>
+      {/* Stats row */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 reveal">
+        {[
+          { icon:"💬", label:"Conversaciones", val: convoCount, href:"/chat" },
+          { icon:"🎨", label:"Imágenes",        val: imageCount,  href:"/gallery" },
+          { icon:"🧠", label:"Memorias",        val: memCount },
+          { icon:"💎", label:"Créditos",        val: me.credits.toLocaleString() },
+        ].map(s => {
+          const inner = (
+            <div className="glass-neon rounded-2xl p-5 text-center h-full">
+              <div className="text-2xl mb-2">{s.icon}</div>
+              <div className="neon-text font-display font-semibold text-3xl">{s.val}</div>
+              <div className="text-white/40 text-xs tracking-widest uppercase mt-1">{s.label}</div>
             </div>
-            {me.tier === "free" && <Link href="/billing" className="btn text-sm">🚀 Mejorar a Pro</Link>}
+          );
+          return s.href
+            ? <Link key={s.label} href={s.href}>{inner}</Link>
+            : <div key={s.label}>{inner}</div>;
+        })}
+      </div>
+
+      {/* Plan card + limit */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8 reveal">
+        <div className="liquid-glass-strong rounded-2xl p-7 lg:col-span-2">
+          <div className="flex items-start justify-between mb-6">
+            <div>
+              <p className="text-xs tracking-widest uppercase text-white/40 mb-1">Plan actual</p>
+              <div className="flex items-center gap-3">
+                <h2 className="font-display font-semibold text-2xl text-white">
+                  {TIER_LABEL[me.tier] || me.tier}
+                </h2>
+                <span className={`pill ${me.tier !== "free" ? "text-emerald-300" : ""}`}>
+                  {me.tier === "free" ? "Gratis" : "✓ Premium"}
+                </span>
+              </div>
+            </div>
+            {me.tier === "free" && (
+              <Link href="/billing" className="btn text-sm px-5 py-2">🚀 Mejorar</Link>
+            )}
           </div>
 
-          <div className="mt-5">
-            <div className="mb-1 flex justify-between text-sm">
-              <span className="text-zinc-400">Créditos usados este ciclo</span>
-              <span className="font-semibold">{used.toLocaleString()} / {monthly.toLocaleString()}</span>
+          <div>
+            <div className="flex justify-between text-sm mb-2">
+              <span className="text-white/45">Créditos usados</span>
+              <span className="text-white font-medium">{used.toLocaleString()} / {monthly.toLocaleString()}</span>
             </div>
-            <div className="h-3 w-full overflow-hidden rounded-full bg-white/10">
+            <div className="h-2.5 w-full rounded-full bg-white/10 overflow-hidden">
               <div
-                className="h-full rounded-full transition-all"
+                className="h-full rounded-full transition-all duration-1000"
                 style={{ width: `${pct}%`, background: "linear-gradient(90deg,#22d3ee,#a855f7,#ec4899)" }}
               />
             </div>
-            <p className="mt-2 text-xs text-zinc-500">{me.credits.toLocaleString()} créditos disponibles</p>
+            <p className="text-white/35 text-xs mt-2">{me.credits.toLocaleString()} créditos disponibles</p>
           </div>
         </div>
 
-        <div className="card reveal flex flex-col justify-center">
-          <p className="text-xs uppercase tracking-widest text-zinc-400">Límite de tu plan</p>
-          <p className="mt-1 text-sm text-zinc-300">⚡ {tierInfo.rate_limit_per_min || "—"} solicitudes/min</p>
-          <p className="text-sm text-zinc-300">🤖 {tierInfo.premium_models ? "Todos los modelos" : "Modelos base"}</p>
-          <p className="text-sm text-zinc-300">💎 {monthly.toLocaleString()} créditos/mes</p>
+        <div className="liquid-glass rounded-2xl p-6 flex flex-col justify-center gap-2.5">
+          <p className="text-xs tracking-widest uppercase text-white/40 mb-1">Tu plan incluye</p>
+          <p className="text-white/70 text-sm">⚡ {tierInfo.rate_limit_per_min || "—"} solicitudes/min</p>
+          <p className="text-white/70 text-sm">🤖 {tierInfo.premium_models ? "Todos los modelos" : "Modelos base"}</p>
+          <p className="text-white/70 text-sm">💎 {monthly.toLocaleString()} créditos/mes</p>
         </div>
-      </section>
+      </div>
 
-      {/* Usage stats */}
-      <section className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-4">
-        {stat("💬", "Conversaciones", convoCount, "/chat")}
-        {stat("🎨", "Imágenes", imageCount, "/gallery")}
-        {stat("🧠", "Memorias", memCount, "/chat")}
-        {stat("💎", "Créditos", me.credits.toLocaleString())}
-      </section>
-
-      {/* Product launcher */}
-      <section className="reveal">
-        <h2 className="font-display mb-4 text-lg font-bold tracking-widest text-zinc-200">TUS HERRAMIENTAS</h2>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {[
-            { href: "/avatar", icon: "🤖", title: "Asistente en vivo", desc: "Habla por voz en tiempo real." },
-            { href: "/chat", icon: "💬", title: "Chat AI", desc: "Conversación inteligente con memoria." },
-            { href: "/studio?tab=image", icon: "🎨", title: "Imágenes", desc: "Genera arte con IA." },
-            { href: "/studio?tab=video", icon: "🎬", title: "Video", desc: "Texto a video (beta)." },
-            { href: "/studio?tab=code", icon: "⚡", title: "Código", desc: "Genera y corrige código." },
-            { href: "/studio?tab=agent", icon: "🧠", title: "Agente", desc: "Automatiza tareas." },
-          ].map((t) => (
-            <Link key={t.title} href={t.href} className="card tilt reveal block">
-              <div className="text-2xl">{t.icon}</div>
-              <h3 className="font-display mt-2 font-bold">{t.title}</h3>
-              <p className="text-sm text-zinc-400">{t.desc}</p>
+      {/* Tools */}
+      <div className="reveal">
+        <p className="text-xs tracking-[0.25em] uppercase text-white/40 mb-4">TUS HERRAMIENTAS</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {tools.map((t, i) => (
+            <Link key={t.title} href={t.href}
+              className="card tilt reveal group block"
+              style={{ transitionDelay: `${i * 60}ms` }}
+            >
+              <div className="w-11 h-11 rounded-xl bg-white/[0.07] flex items-center justify-center text-2xl mb-4 group-hover:scale-110 transition-transform">
+                {t.icon}
+              </div>
+              <h3 className="font-display font-medium text-white text-sm mb-1">{t.title}</h3>
+              <p className="text-white/40 text-xs">{t.desc}</p>
             </Link>
           ))}
         </div>
-      </section>
+      </div>
     </div>
   );
 }
