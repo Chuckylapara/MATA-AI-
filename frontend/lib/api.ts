@@ -99,6 +99,7 @@ export const api = {
   studioThumbnail: (body: { title: string; style?: string; aspect_ratio?: string }) =>
     request("/studio/thumbnail", { method: "POST", body: JSON.stringify(body) }),
   studioVideos: () => request("/studio/videos"),
+  studioVideoStatus: (id: string) => request(`/studio/videos/${id}`),
   // billing
   tiers: () => request("/billing/tiers", {}, false),
   checkout: (tier: string) => request("/billing/checkout", { method: "POST", body: JSON.stringify({ tier }) }),

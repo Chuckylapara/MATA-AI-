@@ -131,12 +131,27 @@ export default function CreatePage() {
         background_music: bgMusic,
         title: b.analysis?.titulo,
       });
-      setVideo({ url: API_BASE + r.url, duration: r.duration, resolution: r.resolution });
+      await pollVideo(r.video_id);
     } catch (e: any) {
       setError(e.message || "Error creando el video automático");
     } finally {
       setBusy(false); setRendering(false); setAutoStage(null);
     }
+  }
+
+  // Poll a background render job until the .mp4 is ready (no request timeout).
+  async function pollVideo(videoId: string): Promise<void> {
+    for (let i = 0; i < 360; i++) { // up to ~30 min
+      await new Promise((r) => setTimeout(r, 5000));
+      let st: any;
+      try { st = await api.studioVideoStatus(videoId); } catch { continue; }
+      if (st.status === "succeeded" && st.url) {
+        setVideo({ url: API_BASE + st.url, duration: st.duration, resolution: st.resolution });
+        return;
+      }
+      if (st.status === "failed") throw new Error(st.error || "El render falló");
+    }
+    throw new Error("El render está tardando mucho. Aparecerá en 'Mis videos' cuando termine.");
   }
 
   async function genThumbnail(b: Board) {
@@ -280,7 +295,7 @@ export default function CreatePage() {
         background_music: bgMusic,
         title: board.analysis?.titulo,
       });
-      setVideo({ url: API_BASE + r.url, duration: r.duration, resolution: r.resolution });
+      await pollVideo(r.video_id);
     } catch (e: any) {
       setError(e.message || "Error generando el video");
     } finally {

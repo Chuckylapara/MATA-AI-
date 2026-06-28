@@ -6,15 +6,18 @@ reuses the platform's image provider (Imagen > OpenAI > Pollinations > SVG mock)
 """
 from __future__ import annotations
 
-from fastapi import Depends
+import asyncio
+import logging
+
+from fastapi import Depends, HTTPException, status
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mata.common.app_factory import create_app
 from mata.common.config import settings
-from mata.common.credits import authorize, refund, settle
-from mata.common.db import get_db
+from mata.common.credits import Reservation, authorize, refund, settle
+from mata.common.db import SessionLocal, get_db
 from mata.common.deps import Identity, get_identity
 from mata.common.llm import active_provider
 from mata.common.models import Generation, JobStatus
@@ -179,14 +182,11 @@ async def make_subtitles(
     }
 
 
-@app.post("/render")
-async def render_video(
-    body: StudioRenderIn,
-    identity: Identity = Depends(get_identity),
-    db: AsyncSession = Depends(get_db),
-):
-    """Assemble scenes (images + narration + optional subtitles) into a real .mp4."""
-    reservation = await authorize(db, identity.user_id, "studio_render")
+async def _run_render_job(gen_id: str, body: StudioRenderIn, user_id: str, reserved: int) -> None:
+    """Background worker: render the .mp4, then update the video record + credits.
+
+    Runs after the HTTP response is sent, so long renders never time out the request.
+    """
     try:
         result = await render.render_project(
             body.escenas,
@@ -198,35 +198,76 @@ async def render_video(
             animate=body.animate,
             background_music=body.background_music,
         )
+        result["url"] = f"/studio{result['url']}"
+        async with SessionLocal() as db:
+            gen = (await db.execute(select(Generation).where(Generation.id == gen_id))).scalar_one_or_none()
+            if gen:
+                gen.status = JobStatus.succeeded
+                gen.result_url = result["url"]
+                gen.result_data = result
+                params = dict(gen.params or {})
+                params.update({"duration": result.get("duration"), "resolution": result.get("resolution")})
+                gen.params = params
+            await settle(db, Reservation(user_id, "studio_render", reserved), reserved, meta={"step": "render"})
+            await db.commit()
     except Exception as exc:  # noqa: BLE001
-        await refund(db, reservation)
-        await db.commit()
-        from fastapi import HTTPException, status
+        logging.getLogger("mata.studio").warning("Render job %s failed: %s", gen_id, exc)
+        async with SessionLocal() as db:
+            gen = (await db.execute(select(Generation).where(Generation.id == gen_id))).scalar_one_or_none()
+            if gen:
+                gen.status = JobStatus.failed
+                gen.error = str(exc)[:500]
+            await refund(db, Reservation(user_id, "studio_render", reserved))
+            await db.commit()
 
-        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Render failed: {exc}") from exc
-    await settle(db, reservation, reservation.amount, meta={"step": "render", "scenes": result["scenes"]})
-    # Make the served path public (gateway/devserver expose the studio app under /studio).
-    result["url"] = f"/studio{result['url']}"
-    # Persist the finished video so it shows up in the user's panel/history.
+
+@app.post("/render")
+async def render_video(
+    body: StudioRenderIn,
+    identity: Identity = Depends(get_identity),
+    db: AsyncSession = Depends(get_db),
+):
+    """Start an async render job. Returns immediately with a video_id to poll.
+
+    The heavy ffmpeg work runs in the background (see /videos/{id} for status),
+    so videos of any length never hit the HTTP request timeout.
+    """
+    reservation = await authorize(db, identity.user_id, "studio_render")
     gen = Generation(
         user_id=identity.user_id,
         module="studio_video",
         prompt=(body.title or "Video")[:200],
         params={
             "title": body.title or "Video",
-            "duration": result.get("duration"),
-            "resolution": result.get("resolution"),
             "aspect_ratio": body.aspect_ratio,
-            "scenes": result.get("scenes"),
+            "resolution": body.resolution,
+            "scenes": len(body.escenas),
         },
-        status=JobStatus.succeeded,
-        result_url=result["url"],
-        result_data=result,
+        status=JobStatus.running,
     )
     db.add(gen)
     await db.commit()
-    result["video_id"] = gen.id
-    return result
+    asyncio.create_task(_run_render_job(gen.id, body, identity.user_id, reservation.amount))
+    return {"video_id": gen.id, "status": "running"}
+
+
+@app.get("/videos/{video_id}")
+async def video_status(video_id: str, identity: Identity = Depends(get_identity), db: AsyncSession = Depends(get_db)):
+    """Poll a single render job's status (running → succeeded/failed)."""
+    gen = (await db.execute(
+        select(Generation).where(Generation.id == video_id, Generation.user_id == identity.user_id)
+    )).scalar_one_or_none()
+    if not gen:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Video no encontrado")
+    return {
+        "id": gen.id,
+        "status": gen.status.value,
+        "url": gen.result_url,
+        "title": (gen.params or {}).get("title"),
+        "duration": (gen.params or {}).get("duration"),
+        "resolution": (gen.params or {}).get("resolution"),
+        "error": gen.error,
+    }
 
 
 @app.get("/videos")
