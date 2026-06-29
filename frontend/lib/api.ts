@@ -122,6 +122,12 @@ export const api = {
   clipsSubmit: (form: FormData) => requestForm("/clips/jobs", form),
   clipsPoll: (id: string) => request(`/clips/jobs/${id}`),
   clipsList: () => request("/clips/jobs"),
+  // AI Tools (Hugging Face, gratis): traducir y resumir
+  toolsLanguages: () => request("/tools/languages", {}, false),
+  translate: (body: { text: string; source: string; target: string }) =>
+    request("/tools/translate", { method: "POST", body: JSON.stringify(body) }),
+  summarize: (text: string) =>
+    request("/tools/summarize", { method: "POST", body: JSON.stringify({ text }) }),
   apiBase: API,
   // billing
   tiers: () => request("/billing/tiers", {}, false),

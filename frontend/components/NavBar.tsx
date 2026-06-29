@@ -7,6 +7,7 @@ const links = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/create",    label: "Crear video" },
   { href: "/clips",     label: "Clips" },
+  { href: "/tools",     label: "Herramientas" },
   { href: "/avatar",    label: "En vivo" },
   { href: "/chat",      label: "Chat" },
   { href: "/studio",    label: "Studio" },

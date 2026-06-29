@@ -23,6 +23,7 @@ CREDIT_COSTS = {
     "studio_subtitles": 1,    # per subtitle file
     "studio_render": 30,      # per assembled mp4
     "clips": 25,              # per short clip produced from a long video
+    "tools": 1,               # per AI text tool call (translate / summarize)
 }
 
 # Tier policy: monthly credit grant + rate limit (requests/min).

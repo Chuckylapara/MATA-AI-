@@ -84,6 +84,10 @@ services:
     <<: *backend
     environment: { SERVICE: clips, PORT: 8011 }
 
+  tools:
+    <<: *backend
+    environment: { SERVICE: tools, PORT: 8012 }
+
   # --- Async generation workers ---
   video-worker:
     <<: *backend
