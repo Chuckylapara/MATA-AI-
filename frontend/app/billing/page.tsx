@@ -237,17 +237,32 @@ export default function BillingPage() {
 }
 
 const MONETAG_ZONE = 11216716;            // anuncio dentro de la app (SDK)
-const AD_URL = "https://omg10.com/4/11216680"; // respaldo (Direct Link) si el SDK no carga
 
 // "Mira un anuncio → gana créditos". El anuncio de Monetag se muestra DENTRO de la
 // app vía show_<zona>(); los créditos se otorgan solo cuando el anuncio termina.
+// NUNCA saca al usuario a otra web: si el SDK no está disponible, se avisa.
 function EarnCredits() {
   const [status, setStatus] = useState<any>(null);
   const [busy, setBusy] = useState(false);
+  const [ready, setReady] = useState(false);
   const [msg, setMsg] = useState("");
 
   useEffect(() => {
     if (getToken()) api.adRewardStatus().then(setStatus).catch(() => {});
+  }, []);
+
+  // Espera a que el SDK de Monetag defina la función show_<zona> (hasta ~12s).
+  useEffect(() => {
+    let tries = 0;
+    const id = setInterval(() => {
+      if (typeof (window as any)[`show_${MONETAG_ZONE}`] === "function") {
+        setReady(true);
+        clearInterval(id);
+      } else if (++tries > 24) {
+        clearInterval(id);
+      }
+    }, 500);
+    return () => clearInterval(id);
   }, []);
 
   async function grant() {
@@ -258,21 +273,17 @@ function EarnCredits() {
 
   async function watch() {
     if (!getToken()) { window.location.href = "/login"; return; }
+    const show = (window as any)[`show_${MONETAG_ZONE}`];
+    if (typeof show !== "function") {
+      setMsg("⚠️ El anuncio no está disponible ahora (desactiva el bloqueador de anuncios e intenta de nuevo).");
+      return;
+    }
     setMsg(""); setBusy(true);
     try {
-      const show = (window as any)[`show_${MONETAG_ZONE}`];
-      if (typeof show === "function") {
-        // Muestra el anuncio DENTRO de la app; la promesa resuelve al terminar.
-        await show();
-        await grant();
-      } else {
-        // Respaldo: el SDK no cargó (adblock, etc.) → abre el enlace y acredita.
-        window.open(AD_URL, "_blank", "noopener");
-        await new Promise((r) => setTimeout(r, 6000));
-        await grant();
-      }
+      await show();        // muestra el anuncio DENTRO de la app; resuelve al terminar
+      await grant();       // otorga créditos solo al terminar
     } catch (e: any) {
-      setMsg(`⚠️ ${e?.message || "No se pudo mostrar el anuncio. Intenta de nuevo."}`);
+      setMsg(`⚠️ ${e?.message || "No se completó el anuncio. Intenta de nuevo."}`);
     } finally {
       setBusy(false);
     }
@@ -294,10 +305,10 @@ function EarnCredits() {
       </div>
       <button
         onClick={watch}
-        disabled={remaining === 0 || busy}
+        disabled={remaining === 0 || busy || !ready}
         className="btn text-sm px-5 py-2.5 shrink-0 disabled:opacity-50"
       >
-        {busy ? "Cargando anuncio…" : remaining === 0 ? "Límite de hoy" : "🎬 Ver anuncio"}
+        {busy ? "Mostrando anuncio…" : !ready ? "Preparando…" : remaining === 0 ? "Límite de hoy" : "🎬 Ver anuncio"}
       </button>
     </div>
   );
