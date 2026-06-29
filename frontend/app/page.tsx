@@ -2,21 +2,21 @@
 import Link from "next/link";
 
 const modules = [
-  { href: "/avatar",          icon: "🎙", label: "Asistente en vivo",      desc: "Habla por voz con Mata en tiempo real." },
-  { href: "/chat",            icon: "💬", label: "Chat Inteligente",        desc: "Conversación natural en streaming con IA." },
-  { href: "/studio?tab=image",icon: "🎨", label: "Generador de Imágenes",   desc: "Crea fotos con IA a partir de texto." },
-  { href: "/studio?tab=video",icon: "🎬", label: "Generador de Video",      desc: "Texto a video con arquitectura async." },
-  { href: "/studio?tab=music",icon: "🎵", label: "Generador de Música",     desc: "Composición musical desde una descripción." },
-  { href: "/studio?tab=code", icon: "⚡", label: "Generador de Código",     desc: "Genera, explica y corrige código." },
-  { href: "/studio?tab=agent",icon: "🧠", label: "Agente Autónomo",         desc: "Automatiza tareas usando herramientas." },
-  { href: "/billing",         icon: "🚀", label: "Planes",                  desc: "Freemium y premium con motor de créditos." },
+  { href: "/create", icon: "🎬", label: "Crear Video",        desc: "De una idea a un video completo con IA. Gratis." },
+  { href: "/clips",  icon: "✂️", label: "Clips Virales",       desc: "Video largo o stream → clips cortos 9:16." },
+  { href: "/chat",   icon: "💬", label: "Chat con IA",         desc: "Conversación natural en tiempo real." },
+  { href: "/studio", icon: "🎨", label: "Imágenes con IA",     desc: "Crea imágenes con FLUX desde texto." },
+  { href: "/tools",  icon: "👁️", label: "Analizar Imágenes",   desc: "Sube una foto y la IA la describe." },
+  { href: "/tools",  icon: "🌐", label: "Traductor",           desc: "Traduce texto al instante." },
+  { href: "/tools",  icon: "📝", label: "Resumen",             desc: "Resume textos largos en segundos." },
+  { href: "/avatar", icon: "🎙", label: "Asistente en Vivo",   desc: "Habla por voz con Mata." },
 ];
 
 const stats = [
-  { num: "3 min", label: "De idea a video" },
-  { num: "8+",    label: "Herramientas IA" },
-  { num: "$0",    label: "Para empezar" },
-  { num: "24/7",  label: "Producción auto" },
+  { num: "9+",   label: "Herramientas IA" },
+  { num: "$0",   label: "Para el cliente" },
+  { num: "3 min",label: "De idea a video" },
+  { num: "24/7", label: "Disponible" },
 ];
 
 const pills = ["Sin cámara", "Sin editar", "Sin mostrar rostro", "100% IA"];
@@ -127,10 +127,10 @@ export default function Home() {
 
             <div className="grid grid-cols-2 gap-3 flex-1">
               {[
-                { icon:"🎙", name:"Voz Neural",    desc:"Lip sync en tiempo real con IA" },
-                { icon:"🧠", name:"Agentes",       desc:"Automatización autónoma de tareas" },
-                { icon:"🎨", name:"Creación",      desc:"Imágenes, video y música con IA" },
-                { icon:"💬", name:"Chat Pro",      desc:"Streaming con memoria contextual" },
+                { icon:"✂️", name:"Clips Virales", desc:"Video largo → clips cortos 9:16" },
+                { icon:"👁️", name:"Visión IA",     desc:"Sube una foto y la IA la entiende" },
+                { icon:"🎨", name:"Imágenes FLUX", desc:"Genera imágenes de alta calidad" },
+                { icon:"💬", name:"Chat & Código", desc:"Conversa y programa con IA" },
               ].map(c => (
                 <div key={c.name} className="glass-neon rounded-2xl p-4 flex flex-col gap-2">
                   <div className="text-2xl">{c.icon}</div>
@@ -159,12 +159,16 @@ export default function Home() {
       <section className="px-4 lg:px-8 py-16">
         <div className="flex items-end justify-between mb-10">
           <div>
-            <p className="text-xs tracking-[0.25em] uppercase text-white/40 mb-2">PLATAFORMA COMPLETA</p>
+            <p className="text-xs tracking-[0.25em] uppercase text-white/40 mb-2">TODO EN UN SOLO LUGAR · GRATIS</p>
             <h2 className="font-display font-semibold text-3xl lg:text-4xl text-white tracking-tight">
-              Todos los módulos
+              Todo lo que necesitas
             </h2>
+            <p className="text-white/50 text-sm mt-2 max-w-lg">
+              Chat, video, clips, imágenes, visión, traductor y más — sin pagar por
+              5 apps distintas. Todo aquí.
+            </p>
           </div>
-          <Link href="/studio" className="pill hidden md:inline-flex">Ver todos →</Link>
+          <Link href="/studio" className="pill hidden md:inline-flex">Empezar →</Link>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
