@@ -82,7 +82,6 @@ class Settings(BaseSettings):
     nvidia_model: str = "meta/llama-3.1-70b-instruct"
     whisper_model: str = "whisper-large-v3"   # used with Groq/OpenAI-compatible STT
     hf_image_model: str = "black-forest-labs/FLUX.1-schnell"  # HF text-to-image
-    hf_music_model: str = "facebook/musicgen-small"          # HF text-to-music
 
     # --- CORS ---
     cors_origins: str = "http://localhost:3000"

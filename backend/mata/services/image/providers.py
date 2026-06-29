@@ -103,7 +103,8 @@ class HuggingFaceImageProvider:
         import httpx
 
         full_prompt = f"{prompt}. Style: {style}" if style else prompt
-        url = f"https://api-inference.huggingface.co/models/{settings.hf_image_model}"
+        # New HF "router" endpoint (the classic api-inference host is deprecated).
+        url = f"https://router.huggingface.co/hf-inference/models/{settings.hf_image_model}"
         headers = {"Authorization": f"Bearer {settings.hf_token}"}
         out: list[str] = []
         async with httpx.AsyncClient(timeout=120) as client:
