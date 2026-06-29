@@ -80,6 +80,35 @@ async def run_music(prompt: str, params: dict) -> tuple[str, dict]:
                 raise RuntimeError(f"Music generation {pred['status']}")
             return pred["output"], {"provider": "replicate", "duration": duration, "genre": genre}
 
+    if settings.hf_token:
+        import base64
+
+        import httpx
+
+        full_prompt = f"{genre} {prompt}" if genre else prompt
+        url = f"https://api-inference.huggingface.co/models/{settings.hf_music_model}"
+        headers = {"Authorization": f"Bearer {settings.hf_token}"}
+        try:
+            async with httpx.AsyncClient(timeout=300) as client:
+                for _ in range(4):
+                    resp = await client.post(url, headers=headers, json={"inputs": full_prompt})
+                    ctype = resp.headers.get("content-type", "")
+                    if resp.status_code == 200 and ctype.startswith("audio/"):
+                        b64 = base64.b64encode(resp.content).decode()
+                        return f"data:{ctype};base64,{b64}", {"provider": "huggingface", "duration": duration, "genre": genre}
+                    if resp.status_code in (503, 429):
+                        wait = 8.0
+                        try:
+                            wait = float(resp.json().get("estimated_time", wait))
+                        except Exception:  # noqa: BLE001
+                            pass
+                        await asyncio.sleep(min(wait, 25) + 1)
+                        continue
+                    break
+        except Exception as exc:  # noqa: BLE001
+            import logging
+            logging.getLogger(__name__).warning("HF MusicGen failed, using mock: %s", exc)
+
     # Mock composition plan
     await asyncio.sleep(0.8)
     structures = [

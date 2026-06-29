@@ -89,6 +89,49 @@ class OpenAIImageProvider:
             return [d.get("url") or f"data:image/png;base64,{d['b64_json']}" for d in data]
 
 
+class HuggingFaceImageProvider:
+    """Text-to-image via the Hugging Face Inference API (free tier).
+
+    Uses FLUX.1-schnell by default. Returns base64 data URLs. Handles the model
+    'loading' (503) state by retrying a couple of times.
+    """
+    name = "huggingface"
+
+    async def generate(self, prompt: str, size: str, n: int, style: str | None) -> list[str]:
+        import asyncio
+
+        import httpx
+
+        full_prompt = f"{prompt}. Style: {style}" if style else prompt
+        url = f"https://api-inference.huggingface.co/models/{settings.hf_image_model}"
+        headers = {"Authorization": f"Bearer {settings.hf_token}"}
+        out: list[str] = []
+        async with httpx.AsyncClient(timeout=120) as client:
+            for i in range(n):
+                payload = {"inputs": full_prompt, "parameters": {"seed": i + 1}}
+                for attempt in range(3):
+                    resp = await client.post(url, headers=headers, json=payload)
+                    ctype = resp.headers.get("content-type", "")
+                    if resp.status_code == 200 and ctype.startswith("image/"):
+                        b64 = base64.b64encode(resp.content).decode()
+                        out.append(f"data:{ctype};base64,{b64}")
+                        break
+                    # Model warming up → wait the suggested time and retry.
+                    if resp.status_code in (503, 429):
+                        wait = 6.0
+                        try:
+                            wait = float(resp.json().get("estimated_time", wait))
+                        except Exception:  # noqa: BLE001
+                            pass
+                        await asyncio.sleep(min(wait, 20) + 1)
+                        continue
+                    resp.raise_for_status()
+                    break
+        if not out:
+            raise RuntimeError("Hugging Face returned no image")
+        return out
+
+
 class PollinationsImageProvider:
     """Free text-to-image generation (no API key). Returns on-demand image URLs."""
     name = "pollinations"
@@ -143,6 +186,8 @@ def get_image_provider():
         chain.append(GeminiImageProvider())
     if settings.openai_api_key:
         chain.append(OpenAIImageProvider())
+    if settings.hf_token:
+        chain.append(HuggingFaceImageProvider())
     # Free, keyless provider + offline mock guarantee the chain always succeeds.
     chain.append(PollinationsImageProvider())
     chain.append(MockImageProvider())

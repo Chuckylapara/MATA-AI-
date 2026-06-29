@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     openai_api_key: str | None = None
     nvidia_api_key: str | None = None  # NVIDIA NIM (build.nvidia.com) — OpenAI-compatible, fast
     groq_api_key: str | None = None    # Groq Whisper (fast, cheap audio transcription for Clips)
+    hf_token: str | None = None        # Hugging Face Inference API (free image/music models)
     replicate_api_token: str | None = None
     elevenlabs_api_key: str | None = None
     elevenlabs_voice_id: str | None = None
@@ -80,6 +81,8 @@ class Settings(BaseSettings):
     gemini_model: str = "gemini-2.5-flash"
     nvidia_model: str = "meta/llama-3.1-70b-instruct"
     whisper_model: str = "whisper-large-v3"   # used with Groq/OpenAI-compatible STT
+    hf_image_model: str = "black-forest-labs/FLUX.1-schnell"  # HF text-to-image
+    hf_music_model: str = "facebook/musicgen-small"          # HF text-to-music
 
     # --- CORS ---
     cors_origins: str = "http://localhost:3000"
