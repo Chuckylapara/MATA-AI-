@@ -1,0 +1,67 @@
+# Producción en UNA sola VM (p.ej. Oracle Cloud Always Free).
+# Backend todo-en-uno (SERVICE=devserver) + Postgres + Redis + Caddy (HTTPS gratis).
+# El frontend NO va aquí: se queda en Firebase Hosting (gratis).
+#
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Requiere un archivo .env junto a este (ver .env.prod.example) con, como mínimo:
+#   DOMAIN, POSTGRES_PASSWORD, JWT_SECRET, NVIDIA_API_KEY, GROQ_API_KEY,
+#   SEED_ADMIN_EMAIL, SEED_ADMIN_PASSWORD, CORS_ORIGINS.
+name: mata-ai-prod
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: mata
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mata}
+      POSTGRES_DB: mata
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mata"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    env_file: .env
+    environment:
+      SERVICE: devserver           # todos los módulos en un proceso (incluye /clips)
+      PORT: "8000"
+      DEV_INMEMORY: "0"            # usa Redis real
+      ENABLE_WORKERS: "1"         # arranca los workers de video/música
+      DATABASE_URL: postgresql+asyncpg://mata:${POSTGRES_PASSWORD:-mata}@db:5432/mata
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

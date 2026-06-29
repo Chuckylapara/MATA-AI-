@@ -4,7 +4,8 @@ ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends curl ffmpeg \
+# ffmpeg: video processing (Studio + Clips). libglib2.0-0: OpenCV headless runtime.
+RUN apt-get update && apt-get install -y --no-install-recommends curl ffmpeg libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .

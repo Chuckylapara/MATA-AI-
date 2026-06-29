@@ -6,6 +6,13 @@ databases:
     user: mata
 
 services:
+  # Managed Redis (Key Value) — real rate-limit + job queue, shared across instances.
+  - type: keyvalue
+    name: mata-ai-redis
+    plan: free
+    ipAllowList: []               # empty = reachable only from your Render services
+    maxmemoryPolicy: allkeys-lru
+
   - type: web
     name: mata-ai-backend
     runtime: docker
@@ -17,7 +24,12 @@ services:
       - key: SERVICE
         value: devserver          # all services in one process
       - key: DEV_INMEMORY
-        value: "1"                # in-memory queue/rate-limit (no Redis needed)
+        value: "0"                # use real Redis (queue/rate-limit survive restarts + scale)
+      - key: REDIS_URL
+        fromService:
+          name: mata-ai-redis
+          type: keyvalue
+          property: connectionString
       - key: DATABASE_URL
         fromDatabase:             # persistent managed Postgres (survives redeploys)
           name: mata-ai-db
@@ -26,10 +38,23 @@ services:
         generateValue: true
       - key: ACCESS_TOKEN_TTL_MINUTES
         value: "120"
+      # --- Admin seed (do NOT use the README defaults in production) ---
+      - key: SEED_ADMIN_EMAIL
+        sync: false                # set in the Render dashboard (secret)
+      - key: SEED_ADMIN_PASSWORD
+        sync: false                # set in the Render dashboard (secret)
+      # --- LLM providers (NVIDIA NIM is the primary engine) ---
+      - key: NVIDIA_API_KEY
+        sync: false                # set in the Render dashboard (secret)
+      - key: NVIDIA_MODEL
+        value: meta/llama-3.1-70b-instruct
       - key: GEMINI_API_KEY
         sync: false                # set in the Render dashboard (secret)
       - key: GEMINI_MODEL
         value: gemini-2.5-flash-lite
+      # --- Clips module: audio transcription (Groq Whisper, fast + cheap) ---
+      - key: GROQ_API_KEY
+        sync: false                # set in the Render dashboard (secret)
       - key: CORS_ORIGINS
         value: "https://mata-ai-236ad.web.app,https://mata-ai-backend.onrender.com"
         # Add more origins if needed (Vercel preview URLs, custom domain, etc.)

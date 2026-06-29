@@ -40,12 +40,14 @@ class Settings(BaseSettings):
     billing_service_url: str = "http://billing:8008"
     admin_service_url: str = "http://admin:8009"
     studio_service_url: str = "http://studio:8010"
+    clips_service_url: str = "http://clips:8011"
 
     # --- Provider keys (optional — mock providers used when absent) ---
     anthropic_api_key: str | None = None
     gemini_api_key: str | None = None
     openai_api_key: str | None = None
     nvidia_api_key: str | None = None  # NVIDIA NIM (build.nvidia.com) — OpenAI-compatible, fast
+    groq_api_key: str | None = None    # Groq Whisper (fast, cheap audio transcription for Clips)
     replicate_api_token: str | None = None
     elevenlabs_api_key: str | None = None
     elevenlabs_voice_id: str | None = None
@@ -77,6 +79,7 @@ class Settings(BaseSettings):
     agent_model: str = "claude-opus-4-8"
     gemini_model: str = "gemini-2.5-flash"
     nvidia_model: str = "meta/llama-3.1-70b-instruct"
+    whisper_model: str = "whisper-large-v3"   # used with Groq/OpenAI-compatible STT
 
     # --- CORS ---
     cors_origins: str = "http://localhost:3000"

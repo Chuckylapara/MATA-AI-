@@ -55,6 +55,24 @@ async function request(path: string, opts: RequestInit = {}, auth = true) {
   return res.status === 204 ? null : res.json();
 }
 
+// Multipart upload (FormData). Lets the browser set the Content-Type boundary;
+// shares the same auth + one-shot refresh behaviour as request().
+async function requestForm(path: string, form: FormData) {
+  const send = () => {
+    const headers: Record<string, string> = {};
+    const token = getToken();
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    return fetch(`${API}${path}`, { method: "POST", body: form, headers });
+  };
+  let res = await send();
+  if (res.status === 401 && (await refreshTokens())) res = await send();
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({}));
+    throw new Error(detail.detail || `${res.status} ${res.statusText}`);
+  }
+  return res.json();
+}
+
 export const api = {
   // auth
   register: (body: any) => request("/auth/register", { method: "POST", body: JSON.stringify(body) }, false).then(saveAuth),
@@ -100,6 +118,11 @@ export const api = {
     request("/studio/thumbnail", { method: "POST", body: JSON.stringify(body) }),
   studioVideos: () => request("/studio/videos"),
   studioVideoStatus: (id: string) => request(`/studio/videos/${id}`),
+  // Clips (long video -> short vertical clips). Submit is multipart (url OR file).
+  clipsSubmit: (form: FormData) => requestForm("/clips/jobs", form),
+  clipsPoll: (id: string) => request(`/clips/jobs/${id}`),
+  clipsList: () => request("/clips/jobs"),
+  apiBase: API,
   // billing
   tiers: () => request("/billing/tiers", {}, false),
   checkout: (tier: string) => request("/billing/checkout", { method: "POST", body: JSON.stringify({ tier }) }),
