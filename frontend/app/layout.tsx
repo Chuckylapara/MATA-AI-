@@ -1,13 +1,21 @@
 import "./globals.css";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import NavBar from "@/components/NavBar";
 import Background from "@/components/Background";
 import WelcomeVoice from "@/components/WelcomeVoice";
 import ScrollReveal from "@/components/ScrollReveal";
+import PWARegister from "@/components/PWARegister";
 
 export const metadata: Metadata = {
   title: "MATA AI · Plataforma de Inteligencia Artificial",
   description: "Chat, voz, imágenes, video, música, código y agentes — todo en una sola plataforma.",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "MATA AI" },
+  icons: { icon: "/icon-192.png", apple: "/apple-touch-icon.png" },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0a0a0f",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -26,6 +34,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body>
+        <PWARegister />
         <Background />
         <WelcomeVoice />
         <ScrollReveal />
