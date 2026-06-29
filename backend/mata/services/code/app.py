@@ -23,6 +23,26 @@ _SYSTEM = {
 
 
 async def _complete(system: str, prompt: str) -> str:
+    if settings.nvidia_api_key:
+        import httpx
+
+        async with httpx.AsyncClient(timeout=120) as client:
+            resp = await client.post(
+                "https://integrate.api.nvidia.com/v1/chat/completions",
+                headers={"Authorization": f"Bearer {settings.nvidia_api_key}"},
+                json={
+                    "model": settings.nvidia_model,
+                    "messages": [
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": prompt},
+                    ],
+                    "max_tokens": 4096,
+                    "temperature": 0.2,
+                },
+            )
+            resp.raise_for_status()
+            return resp.json()["choices"][0]["message"]["content"]
+
     if settings.anthropic_api_key:
         from anthropic import AsyncAnthropic
 

@@ -37,6 +37,11 @@ class SummarizeIn(BaseModel):
     text: str = Field(min_length=1, max_length=8000)
 
 
+class VisionIn(BaseModel):
+    image: str = Field(min_length=1)  # data URL (data:image/...;base64,...) o URL http
+    question: str = Field(default="Describe esta imagen en detalle.", max_length=2000)
+
+
 async def _hf_text(model: str, payload: dict) -> list | dict:
     if not settings.hf_token:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Falta configurar HF_TOKEN en el servidor.")
@@ -91,6 +96,51 @@ async def summarize(
     await settle(db, reservation, reservation.amount, meta={"tool": "summarize"})
     await db.commit()
     return {"summary": out}
+
+
+@app.post("/vision")
+async def vision(
+    body: VisionIn,
+    identity: Identity = Depends(get_identity),
+    db: AsyncSession = Depends(get_db),
+):
+    """Analiza una imagen y responde una pregunta sobre ella (NVIDIA VLM)."""
+    if not settings.nvidia_api_key:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Falta configurar NVIDIA_API_KEY en el servidor.")
+    reservation = await authorize(db, identity.user_id, "tools")
+    payload = {
+        "model": settings.nvidia_vision_model,
+        "messages": [{
+            "role": "user",
+            "content": [
+                {"type": "text", "text": body.question},
+                {"type": "image_url", "image_url": {"url": body.image}},
+            ],
+        }],
+        "max_tokens": 1024,
+        "temperature": 0.2,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=120) as client:
+            resp = await client.post(
+                "https://integrate.api.nvidia.com/v1/chat/completions",
+                headers={"Authorization": f"Bearer {settings.nvidia_api_key}"},
+                json=payload,
+            )
+        if resp.status_code != 200:
+            raise HTTPException(status.HTTP_502_BAD_GATEWAY, "No se pudo analizar la imagen. Prueba con una imagen más pequeña.")
+        answer = resp.json()["choices"][0]["message"]["content"]
+    except HTTPException:
+        await refund(db, reservation)
+        await db.commit()
+        raise
+    except Exception:
+        await refund(db, reservation)
+        await db.commit()
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Error al analizar la imagen.")
+    await settle(db, reservation, reservation.amount, meta={"tool": "vision"})
+    await db.commit()
+    return {"answer": answer}
 
 
 @app.get("/languages")

@@ -128,6 +128,8 @@ export const api = {
     request("/tools/translate", { method: "POST", body: JSON.stringify(body) }),
   summarize: (text: string) =>
     request("/tools/summarize", { method: "POST", body: JSON.stringify({ text }) }),
+  vision: (body: { image: string; question: string }) =>
+    request("/tools/vision", { method: "POST", body: JSON.stringify(body) }),
   apiBase: API,
   // billing
   tiers: () => request("/billing/tiers", {}, false),

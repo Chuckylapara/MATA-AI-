@@ -11,7 +11,7 @@ const LANGS = [
 const PAIRS = new Set(["en-es", "es-en", "en-fr", "fr-en"]);
 
 export default function ToolsPage() {
-  const [tab, setTab] = useState<"translate" | "summarize">("translate");
+  const [tab, setTab] = useState<"translate" | "summarize" | "vision">("translate");
 
   return (
     <div className="mx-auto max-w-3xl px-5 py-8">
@@ -23,7 +23,7 @@ export default function ToolsPage() {
       </header>
 
       <div className="flex gap-2 mb-6">
-        {([["translate", "🌐 Traductor"], ["summarize", "📝 Resumen"]] as const).map(([id, label]) => (
+        {([["translate", "🌐 Traductor"], ["summarize", "📝 Resumen"], ["vision", "👁️ Analizar imagen"]] as const).map(([id, label]) => (
           <button
             key={id}
             onClick={() => setTab(id)}
@@ -36,7 +36,98 @@ export default function ToolsPage() {
         ))}
       </div>
 
-      {tab === "translate" ? <Translator /> : <Summarizer />}
+      {tab === "translate" && <Translator />}
+      {tab === "summarize" && <Summarizer />}
+      {tab === "vision" && <Vision />}
+    </div>
+  );
+}
+
+// Lee una imagen y la redimensiona en el navegador (máx 1024px, JPEG) para
+// que el envío sea rápido y ligero.
+function resizeImage(file: File, max = 1024): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > max || height > max) {
+          const s = max / Math.max(width, height);
+          width = Math.round(width * s);
+          height = Math.round(height * s);
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d")!.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL("image/jpeg", 0.85));
+      };
+      img.onerror = reject;
+      img.src = reader.result as string;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function Vision() {
+  const [preview, setPreview] = useState("");
+  const [question, setQuestion] = useState("Describe esta imagen en detalle.");
+  const [out, setOut] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  async function onFile(file: File | null) {
+    setErr(""); setOut("");
+    if (!file) return;
+    try {
+      setPreview(await resizeImage(file));
+    } catch {
+      setErr("No se pudo leer la imagen.");
+    }
+  }
+
+  async function run() {
+    setErr(""); setOut("");
+    if (!preview) { setErr("Sube una imagen primero."); return; }
+    setBusy(true);
+    try {
+      const r = await api.vision({ image: preview, question });
+      setOut(r.answer || "");
+    } catch (e: any) {
+      setErr(e.message || "Error al analizar la imagen.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="liquid-glass rounded-2xl p-5 space-y-4">
+      <label className="block border border-dashed border-white/15 rounded-xl px-4 py-6 text-center cursor-pointer hover:border-cyan-400/40 transition-colors">
+        <input type="file" accept="image/*" className="hidden" onChange={(e) => onFile(e.target.files?.[0] || null)} />
+        {preview ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={preview} alt="preview" className="max-h-56 mx-auto rounded-lg" />
+        ) : (
+          <span className="text-white/60 text-sm">Haz clic para subir una imagen</span>
+        )}
+      </label>
+      <input
+        value={question}
+        onChange={(e) => setQuestion(e.target.value)}
+        placeholder="¿Qué quieres saber de la imagen?"
+        className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-white/30 outline-none focus:border-cyan-400/50"
+      />
+      <button onClick={run} disabled={busy} className="btn w-full py-3 disabled:opacity-50">
+        {busy ? "Analizando…" : "Analizar imagen"}
+      </button>
+      {err && <p className="text-sm text-red-300">{err}</p>}
+      {out && (
+        <div className="bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-sm text-white/90 whitespace-pre-wrap">
+          {out}
+        </div>
+      )}
     </div>
   );
 }
