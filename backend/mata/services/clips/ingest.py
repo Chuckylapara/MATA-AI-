@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import shutil
+import sys
 from pathlib import Path
 
 # Reuse the platform's hardened ffprobe helper.
@@ -32,11 +33,12 @@ async def _run_capture(*args: str) -> tuple[int, str]:
 
 async def fetch_from_url(url: str, dest_dir: Path) -> Path:
     """Download a video URL to dest_dir/source.mp4 via yt-dlp. Raises IngestError."""
-    if shutil.which("yt-dlp") is None:
-        # Fall back to the module entrypoint if the console script isn't on PATH.
-        base = ["python", "-m", "yt_dlp"]
-    else:
+    if shutil.which("yt-dlp") is not None:
         base = ["yt-dlp"]
+    else:
+        # Fall back to the module entrypoint, using THIS interpreter (not a stray
+        # "python" on PATH that may not have yt-dlp installed).
+        base = [sys.executable, "-m", "yt_dlp"]
 
     out_tmpl = str(dest_dir / "source.%(ext)s")
     args = [
