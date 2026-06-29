@@ -22,7 +22,12 @@ def _normalize_db_url(url: str) -> str:
     return url
 
 
-_db_url = _normalize_db_url(settings.database_url)
+_raw_db_url = settings.database_url
+# Managed Postgres (Neon, Supabase, etc.) requires SSL and signals it via
+# ?sslmode=require. We strip the param (asyncpg rejects it) but must then enable
+# SSL explicitly, or the connection is refused.
+_needs_ssl = "sslmode=require" in _raw_db_url or "sslmode=verify" in _raw_db_url
+_db_url = _normalize_db_url(_raw_db_url)
 _is_sqlite = _db_url.startswith("sqlite")
 _engine_kwargs: dict = {"echo": False}
 if _is_sqlite:
@@ -32,6 +37,10 @@ if _is_sqlite:
     _engine_kwargs.update(connect_args={"check_same_thread": False}, poolclass=StaticPool)
 else:
     _engine_kwargs.update(pool_pre_ping=True, pool_size=5, max_overflow=10)
+    if _needs_ssl:
+        import ssl as _ssl
+
+        _engine_kwargs["connect_args"] = {"ssl": _ssl.create_default_context()}
 
 engine = create_async_engine(_db_url, **_engine_kwargs)
 
