@@ -27,10 +27,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ScrollReveal />
         <NavBar />
         <main className="relative z-10 pt-20 sm:pt-22 pb-16 min-h-screen">{children}</main>
-        <footer className="relative z-10 border-t border-white/[0.06] py-8 text-center">
-          <span className="text-xs text-white/25 tracking-widest uppercase">
+        <footer className="relative z-10 border-t border-white/[0.06] py-8 text-center space-y-3">
+          <span className="block text-xs text-white/25 tracking-widest uppercase">
             MATA AI © 2026 &nbsp;·&nbsp; Plataforma modular de inteligencia artificial
           </span>
+          <nav className="flex items-center justify-center gap-4 text-xs text-white/40">
+            <a href="/terms" className="hover:text-white/70 transition-colors">Términos</a>
+            <span className="text-white/15">·</span>
+            <a href="/privacy" className="hover:text-white/70 transition-colors">Privacidad</a>
+          </nav>
         </footer>
       </body>
     </html>

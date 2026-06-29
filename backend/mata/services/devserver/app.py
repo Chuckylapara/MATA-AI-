@@ -26,6 +26,7 @@ from mata.services.auth.app import _seed_admin
 from mata.services.auth.app import app as auth_app
 from mata.services.billing.app import app as billing_app
 from mata.services.chat.app import app as chat_app
+from mata.services.clips.app import app as clips_app
 from mata.services.code.app import app as code_app
 from mata.services.image.app import app as image_app
 from mata.services.music.app import app as music_app
@@ -45,6 +46,7 @@ _MOUNTS = {
     "/billing": billing_app,
     "/admin": admin_app,
     "/studio": studio_app,
+    "/clips": clips_app,
 }
 
 _worker_tasks: list[asyncio.Task] = []

@@ -34,6 +34,7 @@ SERVICE_MAP = {
     "billing": (settings.billing_service_url, True),
     "admin": (settings.admin_service_url, True),
     "studio": (settings.studio_service_url, True),
+    "clips": (settings.clips_service_url, True),
 }
 
 # Auth routes that don't need a token.

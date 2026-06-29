@@ -45,7 +45,11 @@ Then open:
 - Gateway / OpenAPI docs: http://localhost:8000/docs
 - Admin API: http://localhost:8000/admin (login as the seeded admin)
 
-Seeded admin: `admin@mata.ai` / `admin12345` (change in production).
+Seeded admin (local dev only): `admin@mata.ai` / `admin12345`.
+
+> **Production:** never use these defaults. Set `SEED_ADMIN_EMAIL` and
+> `SEED_ADMIN_PASSWORD` to strong values before the first deploy — the admin is
+> seeded once, on the first startup against an empty users table.
 
 ### Run a single service for development
 

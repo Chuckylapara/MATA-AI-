@@ -1,0 +1,6 @@
+# Caddy: HTTPS automático y gratis (Let's Encrypt) + reverse proxy al backend.
+# DOMAIN viene del .env (p.ej. mata-ai.duckdns.org). Caddy obtiene y renueva el
+# certificado solo, sin configuración extra.
+{$DOMAIN} {
+	reverse_proxy backend:8000
+}

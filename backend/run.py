@@ -25,6 +25,7 @@ _MODULES = {
     "billing": "mata.services.billing.app",
     "admin": "mata.services.admin.app",
     "studio": "mata.services.studio.app",
+    "clips": "mata.services.clips.app",
 }
 
 if SERVICE not in _MODULES:

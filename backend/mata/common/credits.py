@@ -22,6 +22,7 @@ CREDIT_COSTS = {
     "studio_voiceover": 2,    # per narration clip
     "studio_subtitles": 1,    # per subtitle file
     "studio_render": 30,      # per assembled mp4
+    "clips": 25,              # per short clip produced from a long video
 }
 
 # Tier policy: monthly credit grant + rate limit (requests/min).
