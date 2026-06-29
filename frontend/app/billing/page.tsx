@@ -245,6 +245,7 @@ function EarnCredits() {
   const [status, setStatus] = useState<any>(null);
   const [busy, setBusy] = useState(false);
   const [ready, setReady] = useState(false);
+  const [dead, setDead] = useState(false);
   const [msg, setMsg] = useState("");
 
   useEffect(() => {
@@ -252,6 +253,7 @@ function EarnCredits() {
   }, []);
 
   // Espera a que el SDK de Monetag defina la función show_<zona> (hasta ~12s).
+  // Si nunca aparece (zona incompatible / adblock), oculta la tarjeta.
   useEffect(() => {
     let tries = 0;
     const id = setInterval(() => {
@@ -259,11 +261,14 @@ function EarnCredits() {
         setReady(true);
         clearInterval(id);
       } else if (++tries > 24) {
+        setDead(true);
         clearInterval(id);
       }
     }, 500);
     return () => clearInterval(id);
   }, []);
+
+  if (dead) return null;  // sin anuncios in-app disponibles → no mostrar nada roto
 
   async function grant() {
     const r = await api.rewardAd();
