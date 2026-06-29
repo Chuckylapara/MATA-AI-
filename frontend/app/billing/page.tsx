@@ -236,46 +236,45 @@ export default function BillingPage() {
   );
 }
 
-const AD_SECONDS = 15;
-const AD_URL = "https://omg10.com/4/11216680"; // Monetag Direct Link
+const MONETAG_ZONE = 11216716;            // anuncio dentro de la app (SDK)
+const AD_URL = "https://omg10.com/4/11216680"; // respaldo (Direct Link) si el SDK no carga
 
-// "Mira un anuncio → gana créditos". Al hacer clic se abre el anuncio real de
-// Monetag en otra pestaña; tras la cuenta regresiva el usuario reclama sus créditos.
+// "Mira un anuncio → gana créditos". El anuncio de Monetag se muestra DENTRO de la
+// app vía show_<zona>(); los créditos se otorgan solo cuando el anuncio termina.
 function EarnCredits() {
   const [status, setStatus] = useState<any>(null);
-  const [open, setOpen] = useState(false);
-  const [count, setCount] = useState(AD_SECONDS);
+  const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
-  const [claiming, setClaiming] = useState(false);
 
   useEffect(() => {
     if (getToken()) api.adRewardStatus().then(setStatus).catch(() => {});
   }, []);
 
-  useEffect(() => {
-    if (!open || count <= 0) return;
-    const t = setTimeout(() => setCount((c) => c - 1), 1000);
-    return () => clearTimeout(t);
-  }, [open, count]);
-
-  function watch() {
-    if (!getToken()) { window.location.href = "/login"; return; }
-    setMsg(""); setCount(AD_SECONDS); setOpen(true);
-    // Abre el anuncio real de Monetag en otra pestaña.
-    window.open(AD_URL, "_blank", "noopener");
+  async function grant() {
+    const r = await api.rewardAd();
+    setStatus((s: any) => ({ ...s, remaining_today: r.remaining_today, used_today: r.used_today }));
+    setMsg(`✓ +${r.granted} créditos. Saldo: ${r.balance}. Te quedan ${r.remaining_today} anuncios hoy.`);
   }
 
-  async function claim() {
-    setClaiming(true);
+  async function watch() {
+    if (!getToken()) { window.location.href = "/login"; return; }
+    setMsg(""); setBusy(true);
     try {
-      const r = await api.rewardAd();
-      setStatus((s: any) => ({ ...s, remaining_today: r.remaining_today, used_today: r.used_today }));
-      setMsg(`✓ +${r.granted} créditos. Saldo: ${r.balance}. Te quedan ${r.remaining_today} anuncios hoy.`);
+      const show = (window as any)[`show_${MONETAG_ZONE}`];
+      if (typeof show === "function") {
+        // Muestra el anuncio DENTRO de la app; la promesa resuelve al terminar.
+        await show();
+        await grant();
+      } else {
+        // Respaldo: el SDK no cargó (adblock, etc.) → abre el enlace y acredita.
+        window.open(AD_URL, "_blank", "noopener");
+        await new Promise((r) => setTimeout(r, 6000));
+        await grant();
+      }
     } catch (e: any) {
-      setMsg(`⚠️ ${e.message}`);
+      setMsg(`⚠️ ${e?.message || "No se pudo mostrar el anuncio. Intenta de nuevo."}`);
     } finally {
-      setClaiming(false);
-      setOpen(false);
+      setBusy(false);
     }
   }
 
@@ -295,30 +294,11 @@ function EarnCredits() {
       </div>
       <button
         onClick={watch}
-        disabled={remaining === 0}
+        disabled={remaining === 0 || busy}
         className="btn text-sm px-5 py-2.5 shrink-0 disabled:opacity-50"
       >
-        {remaining === 0 ? "Límite de hoy" : "🎬 Ver anuncio"}
+        {busy ? "Cargando anuncio…" : remaining === 0 ? "Límite de hoy" : "🎬 Ver anuncio"}
       </button>
-
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm px-4">
-          <div className="liquid-glass-strong rounded-2xl p-8 max-w-sm w-full text-center">
-            <p className="text-xs tracking-widest uppercase text-white/40 mb-4">Anuncio</p>
-            <div className="aspect-video rounded-xl bg-gradient-to-br from-violet-600/40 to-cyan-600/40 flex items-center justify-center mb-5 px-4">
-              <span className="text-white/80 text-sm">📺 El anuncio se abrió en otra pestaña. Míralo para apoyar la app.</span>
-            </div>
-            {count > 0 ? (
-              <p className="text-white/60 text-sm">Espera <b className="text-white">{count}s</b> para reclamar tus créditos…</p>
-            ) : (
-              <button onClick={claim} disabled={claiming} className="btn w-full py-3 disabled:opacity-50">
-                {claiming ? "Acreditando…" : "🎁 Reclamar créditos"}
-              </button>
-            )}
-            <button onClick={() => setOpen(false)} className="text-white/40 text-xs mt-4 hover:text-white/70">Cancelar</button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -16,6 +16,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         {/* Monetag site verification */}
         <meta name="monetag" content="888a781f19beb9e50100493eb93dd36d" />
+        {/* Monetag rewarded SDK — expone window.show_11216716() */}
+        <script src="https://5gvci.com/act/files/tag.min.js?z=11216716" data-cfasync="false" async />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
