@@ -237,10 +237,10 @@ export default function BillingPage() {
 }
 
 const AD_SECONDS = 15;
+const AD_URL = "https://omg10.com/4/11216680"; // Monetag Direct Link
 
-// "Mira un anuncio → gana créditos". El anuncio mostrado es una DEMO; cuando
-// conectes una red de anuncios real (con verificación), reemplaza el contenido
-// del modal por su widget y deja la llamada api.rewardAd() en el callback de recompensa.
+// "Mira un anuncio → gana créditos". Al hacer clic se abre el anuncio real de
+// Monetag en otra pestaña; tras la cuenta regresiva el usuario reclama sus créditos.
 function EarnCredits() {
   const [status, setStatus] = useState<any>(null);
   const [open, setOpen] = useState(false);
@@ -261,6 +261,8 @@ function EarnCredits() {
   function watch() {
     if (!getToken()) { window.location.href = "/login"; return; }
     setMsg(""); setCount(AD_SECONDS); setOpen(true);
+    // Abre el anuncio real de Monetag en otra pestaña.
+    window.open(AD_URL, "_blank", "noopener");
   }
 
   async function claim() {
@@ -302,9 +304,9 @@ function EarnCredits() {
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm px-4">
           <div className="liquid-glass-strong rounded-2xl p-8 max-w-sm w-full text-center">
-            <p className="text-xs tracking-widest uppercase text-white/40 mb-4">Anuncio (demostración)</p>
-            <div className="aspect-video rounded-xl bg-gradient-to-br from-violet-600/40 to-cyan-600/40 flex items-center justify-center mb-5">
-              <span className="text-white/80 text-sm">📺 Tu anuncio aparecerá aquí</span>
+            <p className="text-xs tracking-widest uppercase text-white/40 mb-4">Anuncio</p>
+            <div className="aspect-video rounded-xl bg-gradient-to-br from-violet-600/40 to-cyan-600/40 flex items-center justify-center mb-5 px-4">
+              <span className="text-white/80 text-sm">📺 El anuncio se abrió en otra pestaña. Míralo para apoyar la app.</span>
             </div>
             {count > 0 ? (
               <p className="text-white/60 text-sm">Espera <b className="text-white">{count}s</b> para reclamar tus créditos…</p>
@@ -313,6 +315,7 @@ function EarnCredits() {
                 {claiming ? "Acreditando…" : "🎁 Reclamar créditos"}
               </button>
             )}
+            <button onClick={() => setOpen(false)} className="text-white/40 text-xs mt-4 hover:text-white/70">Cancelar</button>
           </div>
         </div>
       )}
