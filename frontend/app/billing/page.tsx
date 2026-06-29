@@ -99,6 +99,8 @@ export default function BillingPage() {
         </div>
       )}
 
+      <EarnCredits />
+
       {/* Subscription tiers */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5 reveal">
         {Object.entries(tiers).map(([name, t]) => {
@@ -229,6 +231,90 @@ export default function BillingPage() {
         <p className="text-center text-white/35 text-xs mt-6">
           <Link href="/login" className="text-cyan-400/80 hover:text-cyan-400">Inicia sesión</Link> para suscribirte o comprar créditos.
         </p>
+      )}
+    </div>
+  );
+}
+
+const AD_SECONDS = 15;
+
+// "Mira un anuncio → gana créditos". El anuncio mostrado es una DEMO; cuando
+// conectes una red de anuncios real (con verificación), reemplaza el contenido
+// del modal por su widget y deja la llamada api.rewardAd() en el callback de recompensa.
+function EarnCredits() {
+  const [status, setStatus] = useState<any>(null);
+  const [open, setOpen] = useState(false);
+  const [count, setCount] = useState(AD_SECONDS);
+  const [msg, setMsg] = useState("");
+  const [claiming, setClaiming] = useState(false);
+
+  useEffect(() => {
+    if (getToken()) api.adRewardStatus().then(setStatus).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!open || count <= 0) return;
+    const t = setTimeout(() => setCount((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [open, count]);
+
+  function watch() {
+    if (!getToken()) { window.location.href = "/login"; return; }
+    setMsg(""); setCount(AD_SECONDS); setOpen(true);
+  }
+
+  async function claim() {
+    setClaiming(true);
+    try {
+      const r = await api.rewardAd();
+      setStatus((s: any) => ({ ...s, remaining_today: r.remaining_today, used_today: r.used_today }));
+      setMsg(`✓ +${r.granted} créditos. Saldo: ${r.balance}. Te quedan ${r.remaining_today} anuncios hoy.`);
+    } catch (e: any) {
+      setMsg(`⚠️ ${e.message}`);
+    } finally {
+      setClaiming(false);
+      setOpen(false);
+    }
+  }
+
+  const remaining = status?.remaining_today ?? null;
+
+  return (
+    <div className="liquid-glass rounded-2xl p-5 mb-8 max-w-2xl mx-auto flex flex-col sm:flex-row items-center gap-4 reveal"
+         style={{ boxShadow: "inset 0 0 0 1px rgba(34,211,238,0.25)" }}>
+      <div className="text-3xl">🎁</div>
+      <div className="flex-1 text-center sm:text-left">
+        <div className="text-white font-medium">Gana créditos gratis</div>
+        <div className="text-white/50 text-sm mt-0.5">
+          Mira un anuncio corto y recibe {status?.credits_per_ad ?? 5} créditos.
+          {remaining !== null && ` Te quedan ${remaining} hoy.`}
+        </div>
+        {msg && <div className="text-cyan-300/90 text-xs mt-1">{msg}</div>}
+      </div>
+      <button
+        onClick={watch}
+        disabled={remaining === 0}
+        className="btn text-sm px-5 py-2.5 shrink-0 disabled:opacity-50"
+      >
+        {remaining === 0 ? "Límite de hoy" : "🎬 Ver anuncio"}
+      </button>
+
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm px-4">
+          <div className="liquid-glass-strong rounded-2xl p-8 max-w-sm w-full text-center">
+            <p className="text-xs tracking-widest uppercase text-white/40 mb-4">Anuncio (demostración)</p>
+            <div className="aspect-video rounded-xl bg-gradient-to-br from-violet-600/40 to-cyan-600/40 flex items-center justify-center mb-5">
+              <span className="text-white/80 text-sm">📺 Tu anuncio aparecerá aquí</span>
+            </div>
+            {count > 0 ? (
+              <p className="text-white/60 text-sm">Espera <b className="text-white">{count}s</b> para reclamar tus créditos…</p>
+            ) : (
+              <button onClick={claim} disabled={claiming} className="btn w-full py-3 disabled:opacity-50">
+                {claiming ? "Acreditando…" : "🎁 Reclamar créditos"}
+              </button>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

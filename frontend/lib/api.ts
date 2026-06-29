@@ -133,6 +133,8 @@ export const api = {
   apiBase: API,
   // billing
   tiers: () => request("/billing/tiers", {}, false),
+  adRewardStatus: () => request("/billing/ad-reward/status"),
+  rewardAd: () => request("/billing/ad-reward", { method: "POST" }),
   checkout: (tier: string) => request("/billing/checkout", { method: "POST", body: JSON.stringify({ tier }) }),
   // billing — PayPal (subscriptions + one-time credit packs)
   creditPacks: () => request("/billing/credit-packs", {}, false),

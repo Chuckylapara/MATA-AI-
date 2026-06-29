@@ -5,8 +5,10 @@ and grants credits, so the freemium->premium flow is fully testable offline.
 """
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 from fastapi import Depends, HTTPException, Request, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mata.common.app_factory import create_app
@@ -14,7 +16,12 @@ from mata.common.config import settings
 from mata.common.credits import CREDIT_PACKS, TIER_POLICY, grant_credits
 from mata.common.db import SessionLocal, get_db
 from mata.common.deps import Identity, get_identity
-from mata.common.models import Subscription, Tier, User
+from mata.common.models import Subscription, Tier, UsageEvent, User
+
+# --- Rewarded ads: watch an ad -> earn credits (free top-up) ---
+AD_REWARD_CREDITS = 5      # credits granted per ad watched
+AD_DAILY_MAX = 20          # max ads rewarded per user per day
+AD_COOLDOWN_SECONDS = 15   # min seconds between rewards (≈ ad length; anti-spam)
 from mata.common.schemas import CheckoutIn, PayPalCaptureIn, PayPalOrderIn, PayPalSubscribeIn
 from mata.services.billing import paypal
 
@@ -89,6 +96,60 @@ async def checkout(body: CheckoutIn, identity: Identity = Depends(get_identity),
 async def credit_packs():
     """Public catalog of one-time credit packs."""
     return {"paypal_enabled": settings.paypal_enabled, "packs": CREDIT_PACKS}
+
+
+async def _ads_today(db: AsyncSession, user_id: str) -> tuple[int, datetime | None]:
+    """(count of ad rewards today, timestamp of the most recent one)."""
+    start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    rows = (await db.execute(
+        select(UsageEvent.created_at)
+        .where(
+            UsageEvent.user_id == user_id,
+            UsageEvent.module == "ad_reward",
+            UsageEvent.created_at >= start,
+        )
+        .order_by(UsageEvent.created_at.desc())
+    )).scalars().all()
+    return len(rows), (rows[0] if rows else None)
+
+
+@app.get("/ad-reward/status")
+async def ad_reward_status(identity: Identity = Depends(get_identity), db: AsyncSession = Depends(get_db)):
+    """How many rewarded ads the user can still watch today (powers the UI)."""
+    used, _ = await _ads_today(db, identity.user_id)
+    return {
+        "credits_per_ad": AD_REWARD_CREDITS,
+        "daily_max": AD_DAILY_MAX,
+        "used_today": used,
+        "remaining_today": max(0, AD_DAILY_MAX - used),
+    }
+
+
+@app.post("/ad-reward")
+async def ad_reward(identity: Identity = Depends(get_identity), db: AsyncSession = Depends(get_db)):
+    """Grant credits after the user watched a rewarded ad.
+
+    Anti-abuse: daily cap + cooldown between rewards. When a real rewarded-ad
+    network is connected, its server-side verification token should gate this call.
+    """
+    used, last = await _ads_today(db, identity.user_id)
+    if used >= AD_DAILY_MAX:
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Llegaste al límite de anuncios de hoy. Vuelve mañana.")
+    if last is not None:
+        elapsed = (datetime.now(timezone.utc) - last).total_seconds()
+        if elapsed < AD_COOLDOWN_SECONDS:
+            raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, f"Espera {int(AD_COOLDOWN_SECONDS - elapsed)}s antes del próximo anuncio.")
+
+    await grant_credits(db, identity.user_id, AD_REWARD_CREDITS)
+    db.add(UsageEvent(user_id=identity.user_id, module="ad_reward", credits=AD_REWARD_CREDITS, meta={"source": "rewarded_ad"}))
+    balance = (await db.execute(select(User.credits).where(User.id == identity.user_id))).scalar_one()
+    await db.commit()
+    return {
+        "granted": AD_REWARD_CREDITS,
+        "balance": balance,
+        "used_today": used + 1,
+        "remaining_today": max(0, AD_DAILY_MAX - used - 1),
+    }
 
 
 @app.post("/paypal/subscribe")
