@@ -135,6 +135,19 @@ class StudioRenderIn(BaseModel):
     title: str | None = Field(default=None, max_length=200)  # for the history/panel
 
 
+class StudioTrendsIn(BaseModel):
+    niche: str = Field(min_length=2, max_length=200)
+    language: str = Field(default="es", max_length=10)
+    count: int = Field(default=8, ge=3, le=15)
+
+
+class StudioSeoPackIn(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    description: str = Field(default="", max_length=2000)
+    category: str = Field(default="General", max_length=100)
+    language: str = Field(default="es", max_length=10)
+
+
 class StudioThumbnailIn(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     style: str | None = None

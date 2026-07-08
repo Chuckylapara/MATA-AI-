@@ -22,8 +22,14 @@ CREDIT_COSTS = {
     "studio_voiceover": 2,    # per narration clip
     "studio_subtitles": 1,    # per subtitle file
     "studio_render": 30,      # per assembled mp4
+    "studio_trends": 1,       # niche -> trending video ideas
+    "studio_seo": 2,          # title -> full SEO/export pack
     "clips": 25,              # per short clip produced from a long video
     "tools": 1,               # per AI text tool call (translate / summarize)
+    "health_chat": 1,         # per symptom-assistant message
+    "health_scan": 3,         # per camera scan (vision model)
+    "health_report": 2,       # per weekly report synthesis
+    "health_wellness": 1,     # per wellness recommendation refresh
 }
 
 # Tier policy: monthly credit grant + rate limit (requests/min).

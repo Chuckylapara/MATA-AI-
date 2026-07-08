@@ -11,6 +11,7 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     Enum,
+    Float,
     ForeignKey,
     Integer,
     String,
@@ -155,6 +156,54 @@ class Subscription(Base):
     status: Mapped[str] = mapped_column(String(32), default="active")
     current_period_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class HealthProfile(Base):
+    """Mata Health AI — personal health profile (one per user)."""
+
+    __tablename__ = "health_profiles"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True, index=True)
+    full_name: Mapped[str | None] = mapped_column(String(255))
+    age: Mapped[int | None] = mapped_column(Integer)
+    weight_kg: Mapped[float | None] = mapped_column(Float)
+    height_cm: Mapped[float | None] = mapped_column(Float)
+    allergies: Mapped[str | None] = mapped_column(Text)
+    medications: Mapped[str | None] = mapped_column(Text)
+    emergency_contact_name: Mapped[str | None] = mapped_column(String(255))
+    emergency_contact_phone: Mapped[str | None] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class HealthEntryKind(str, enum.Enum):
+    symptom_chat = "symptom_chat"
+    scan = "scan"
+    voice = "voice"
+    heart_rate = "heart_rate"
+    steps = "steps"
+    fall_alert = "fall_alert"
+
+
+class HealthSeverity(str, enum.Enum):
+    normal = "normal"
+    watch = "watch"
+    urgent = "urgent"
+
+
+class HealthEntry(Base):
+    """A single logged health event: a symptom chat turn, a camera scan, a vitals reading..."""
+
+    __tablename__ = "health_entries"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[HealthEntryKind] = mapped_column(Enum(HealthEntryKind), index=True)
+    summary: Mapped[str] = mapped_column(Text)
+    data: Mapped[dict] = mapped_column(JSON, default=dict)
+    severity: Mapped[HealthSeverity] = mapped_column(Enum(HealthSeverity), default=HealthSeverity.normal)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
 
 
 class UsageEvent(Base):

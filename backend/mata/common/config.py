@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     studio_service_url: str = "http://studio:8010"
     clips_service_url: str = "http://clips:8011"
     tools_service_url: str = "http://tools:8012"
+    health_service_url: str = "http://health:8013"
 
     # --- Provider keys (optional — mock providers used when absent) ---
     anthropic_api_key: str | None = None

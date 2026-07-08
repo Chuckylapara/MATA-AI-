@@ -28,6 +28,7 @@ from mata.services.billing.app import app as billing_app
 from mata.services.chat.app import app as chat_app
 from mata.services.clips.app import app as clips_app
 from mata.services.code.app import app as code_app
+from mata.services.health.app import app as health_app
 from mata.services.image.app import app as image_app
 from mata.services.music.app import app as music_app
 from mata.services.music.providers import run_music
@@ -49,6 +50,7 @@ _MOUNTS = {
     "/studio": studio_app,
     "/clips": clips_app,
     "/tools": tools_app,
+    "/health": health_app,
 }
 
 _worker_tasks: list[asyncio.Task] = []

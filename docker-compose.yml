@@ -88,6 +88,10 @@ services:
     <<: *backend
     environment: { SERVICE: tools, PORT: 8012 }
 
+  health:
+    <<: *backend
+    environment: { SERVICE: health, PORT: 8013 }
+
   # --- Async generation workers ---
   video-worker:
     <<: *backend

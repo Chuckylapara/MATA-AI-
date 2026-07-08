@@ -27,3 +27,4 @@ backend/_renders/
 .DS_Store
 Thumbs.db
 frontend/tsconfig.tsbuildinfo
+whop-store/.env

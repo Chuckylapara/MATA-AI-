@@ -99,13 +99,80 @@ export default function CreatePage() {
   const [thumb, setThumb] = useState<string | null>(null);
   const [thumbBusy, setThumbBusy] = useState(false);
 
+  // Trend Agent (paso 0): nicho -> ideas virales en tendencia.
+  const [niche, setNiche] = useState("");
+  const [trendsBusy, setTrendsBusy] = useState(false);
+  const [trendList, setTrendList] = useState<any[]>([]);
+
+  // SEO Export Pack (títulos, descripciones, hashtags, captions IG/FB).
+  const [seo, setSeo] = useState<any | null>(null);
+  const [seoBusy, setSeoBusy] = useState(false);
+
+  async function findTrends() {
+    if (niche.trim().length < 2) return;
+    setTrendsBusy(true); setError("");
+    try {
+      const r = await api.studioTrends({ niche: niche.trim() });
+      setTrendList(r.tendencias || []);
+    } catch (e: any) {
+      setError(e.message || "Error buscando tendencias");
+    } finally {
+      setTrendsBusy(false);
+    }
+  }
+
+  async function genSeoPack() {
+    if (!board?.analysis) return;
+    setSeoBusy(true); setError("");
+    try {
+      const r = await api.studioSeoPack({
+        title: board.analysis.titulo || idea,
+        description: board.analysis.descripcion || "",
+        category: board.analysis.categoria || "General",
+        language: board.analysis.idioma || "es",
+      });
+      setSeo(r);
+    } catch (e: any) {
+      setError(e.message || "Error generando el pack SEO");
+    } finally {
+      setSeoBusy(false);
+    }
+  }
+
+  function copyText(text: string) {
+    navigator.clipboard?.writeText(text).catch(() => {});
+  }
+
+  function downloadSeoPack() {
+    if (!seo) return;
+    const L: string[] = [];
+    L.push("PACK SEO — VIRAL AI STUDIO");
+    L.push("=".repeat(40));
+    L.push("\nTÍTULOS:");
+    (seo.titulos || []).forEach((t: string, i: number) => L.push(`${i + 1}. ${t}`));
+    L.push("\nDESCRIPCIONES:");
+    (seo.descripciones || []).forEach((d: string, i: number) => L.push(`${i + 1}. ${d}`));
+    L.push("\nHASHTAGS:");
+    L.push((seo.hashtags || []).join(" "));
+    L.push("\nCAPTION INSTAGRAM:\n" + (seo.caption_instagram || ""));
+    L.push("\nCAPTION FACEBOOK:\n" + (seo.caption_facebook || ""));
+    if (seo.mejor_hora) L.push(`\nMejor hora para publicar: ${seo.mejor_hora}`);
+    if (seo.cta) L.push(`CTA: ${seo.cta}`);
+    const blob = new Blob([L.join("\n")], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url; link.download = "pack-seo.txt";
+    document.body.appendChild(link); link.click(); link.remove();
+    URL.revokeObjectURL(url);
+  }
+
   // One-click "magic" mode: idea -> guion -> imágenes -> voz -> video, sin pasos manuales.
   const [autoStage, setAutoStage] = useState<"guion" | "video" | null>(null);
 
   async function autoCreate() {
     if (idea.trim().length < 2) return;
     setBusy(true); setError(""); setBoard(null);
-    setImages({}); setPicked({}); setAudio({}); setVideo(null); setThumb(null);
+    setImages({}); setPicked({}); setAudio({}); setVideo(null); setThumb(null); setSeo(null);
     try {
       setAutoStage("guion");
       const b = await api.studioStoryboard({ idea, target_seconds: seconds, aspect_ratio: aspect });
@@ -204,6 +271,7 @@ export default function CreatePage() {
     setAudio({});
     setVideo(null);
     setThumb(null);
+    setSeo(null);
     try {
       const b = await api.studioStoryboard({ idea, target_seconds: seconds, aspect_ratio: aspect });
       setBoard(b);
@@ -312,6 +380,44 @@ export default function CreatePage() {
           Viral AI <span style={{ background: "linear-gradient(90deg,#a78bfa,#22d3ee)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>Studio</span>
         </h1>
         <p className="text-sm text-zinc-400">Una idea → guion por escenas, prompts e imágenes consistentes.</p>
+      </div>
+
+      {/* Trend Agent (paso 0): descubre ideas en tendencia por nicho */}
+      <div className="card mb-4 space-y-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-sm font-semibold text-violet-300">🔥 Tendencias</span>
+          <input
+            className="input !w-64 !py-1.5 text-sm"
+            placeholder="Tu nicho… ej: misterios del océano"
+            value={niche}
+            onChange={(e) => setNiche(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && findTrends()}
+          />
+          <button className="btn !py-1.5 text-sm" onClick={findTrends} disabled={trendsBusy || niche.trim().length < 2}>
+            {trendsBusy ? "Buscando…" : "Buscar ideas virales"}
+          </button>
+          <span className="text-xs text-zinc-500">Elige una idea y se llena sola abajo</span>
+        </div>
+        {!!trendList.length && (
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {trendList.map((t, i) => (
+              <button
+                key={i}
+                onClick={() => { setIdea(t.idea); setTrendList([]); }}
+                className="rounded-xl border border-white/10 bg-black/20 p-3 text-left transition hover:border-cyan-400/60"
+              >
+                <div className="mb-1 flex items-center gap-2">
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] ${t.potencial === "alto" ? "bg-emerald-400/15 text-emerald-300" : "bg-amber-400/15 text-amber-300"}`}>
+                    {t.potencial === "alto" ? "🔥 alto" : "⚡ medio"}
+                  </span>
+                  <span className="text-[11px] text-zinc-500">{t.formato}</span>
+                </div>
+                <p className="text-sm text-zinc-200">{t.idea}</p>
+                {t.por_que_funciona && <p className="mt-1 text-[11px] text-zinc-500">{t.por_que_funciona}</p>}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Idea form */}
@@ -432,6 +538,82 @@ export default function CreatePage() {
             </div>
             {thumb && <img src={thumb} alt="miniatura" className="w-full max-w-md rounded-xl border border-white/10" />}
           </div>
+        </div>
+      )}
+
+      {/* SEO Export Pack */}
+      {a && (
+        <div className="card mt-4">
+          <div className="mb-2 flex flex-wrap items-center gap-3">
+            <span className="text-sm font-semibold text-violet-300">📦 Pack SEO para publicar</span>
+            <button className="btn !py-1.5 text-sm" onClick={genSeoPack} disabled={seoBusy}>
+              {seoBusy ? "Generando…" : seo ? "Regenerar" : "Generar pack (títulos + hashtags + captions)"}
+            </button>
+            {seo && (
+              <button className="btn-glass !py-1.5 text-sm" onClick={downloadSeoPack}>
+                ⬇ Descargar todo (.txt)
+              </button>
+            )}
+          </div>
+          {seo && (
+            <div className="space-y-4 text-sm">
+              <div>
+                <p className="mb-1 text-xs uppercase tracking-wide text-zinc-500">10 títulos virales</p>
+                <div className="space-y-1">
+                  {(seo.titulos || []).map((t: string, i: number) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <button className="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-zinc-400 hover:text-white" onClick={() => copyText(t)}>copiar</button>
+                      <span className="text-zinc-300">{t}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="mb-1 text-xs uppercase tracking-wide text-zinc-500">10 descripciones</p>
+                <div className="space-y-1">
+                  {(seo.descripciones || []).map((d: string, i: number) => (
+                    <div key={i} className="flex items-start gap-2">
+                      <button className="shrink-0 rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-zinc-400 hover:text-white" onClick={() => copyText(d)}>copiar</button>
+                      <span className="text-zinc-400">{d}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div className="mb-1 flex items-center gap-2">
+                  <p className="text-xs uppercase tracking-wide text-zinc-500">50 hashtags</p>
+                  <button className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-zinc-400 hover:text-white" onClick={() => copyText((seo.hashtags || []).join(" "))}>copiar todos</button>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {(seo.hashtags || []).map((h: string, i: number) => (
+                    <span key={i} className="rounded-full bg-cyan-400/10 px-2 py-0.5 text-xs text-cyan-300">{h}</span>
+                  ))}
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <div className="mb-1 flex items-center gap-2">
+                    <p className="text-xs uppercase tracking-wide text-zinc-500">Caption Instagram</p>
+                    <button className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-zinc-400 hover:text-white" onClick={() => copyText(seo.caption_instagram || "")}>copiar</button>
+                  </div>
+                  <p className="whitespace-pre-wrap rounded-lg bg-black/30 p-2 text-xs text-zinc-300">{seo.caption_instagram}</p>
+                </div>
+                <div>
+                  <div className="mb-1 flex items-center gap-2">
+                    <p className="text-xs uppercase tracking-wide text-zinc-500">Caption Facebook</p>
+                    <button className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-zinc-400 hover:text-white" onClick={() => copyText(seo.caption_facebook || "")}>copiar</button>
+                  </div>
+                  <p className="whitespace-pre-wrap rounded-lg bg-black/30 p-2 text-xs text-zinc-300">{seo.caption_facebook}</p>
+                </div>
+              </div>
+              {(seo.mejor_hora || seo.cta) && (
+                <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-zinc-400">
+                  {seo.mejor_hora && <span>🕐 Mejor hora: {seo.mejor_hora}</span>}
+                  {seo.cta && <span>📣 CTA: {seo.cta}</span>}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

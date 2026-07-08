@@ -25,9 +25,11 @@ from mata.common.schemas import (
     StudioIdeaIn,
     StudioRenderIn,
     StudioSceneImagesIn,
+    StudioSeoPackIn,
     StudioStoryboardIn,
     StudioSubtitlesIn,
     StudioThumbnailIn,
+    StudioTrendsIn,
     StudioVoiceoverIn,
 )
 from mata.services.image.providers import PollinationsImageProvider, get_image_provider
@@ -70,6 +72,38 @@ async def analyze(
         result = await brain.analyze(body.idea)
     finally:
         await settle(db, reservation, reservation.amount, meta={"step": "analyze"})
+        await db.commit()
+    return result
+
+
+@app.post("/trends")
+async def trends(
+    body: StudioTrendsIn,
+    identity: Identity = Depends(get_identity),
+    db: AsyncSession = Depends(get_db),
+):
+    """Trend Agent: niche -> ready-to-produce viral video ideas (paso 0 del flujo)."""
+    reservation = await authorize(db, identity.user_id, "studio_trends")
+    try:
+        result = await brain.trends(body.niche, body.language, body.count)
+    finally:
+        await settle(db, reservation, reservation.amount, meta={"step": "trends"})
+        await db.commit()
+    return result
+
+
+@app.post("/seo-pack")
+async def seo_pack(
+    body: StudioSeoPackIn,
+    identity: Identity = Depends(get_identity),
+    db: AsyncSession = Depends(get_db),
+):
+    """SEO Agent: 10 títulos + 10 descripciones + 50 hashtags + captions IG/FB."""
+    reservation = await authorize(db, identity.user_id, "studio_seo")
+    try:
+        result = await brain.seo_pack(body.title, body.description, body.category, body.language)
+    finally:
+        await settle(db, reservation, reservation.amount, meta={"step": "seo-pack"})
         await db.commit()
     return result
 

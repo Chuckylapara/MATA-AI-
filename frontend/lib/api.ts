@@ -93,6 +93,10 @@ export const api = {
   musicPoll: (id: string) => request(`/music/jobs/${id}`),
   agentRun: (body: any) => request("/agent/runs", { method: "POST", body: JSON.stringify(body) }),
   // Viral AI Studio (idea -> analysis -> storyboard -> per-scene images)
+  studioTrends: (body: { niche: string; language?: string; count?: number }) =>
+    request("/studio/trends", { method: "POST", body: JSON.stringify(body) }),
+  studioSeoPack: (body: { title: string; description?: string; category?: string; language?: string }) =>
+    request("/studio/seo-pack", { method: "POST", body: JSON.stringify(body) }),
   studioAnalyze: (idea: string) =>
     request("/studio/analyze", { method: "POST", body: JSON.stringify({ idea }) }),
   studioStoryboard: (body: { idea: string; analysis?: any; target_seconds: number; aspect_ratio: string }) =>
@@ -131,6 +135,19 @@ export const api = {
   vision: (body: { image: string; question: string }) =>
     request("/tools/vision", { method: "POST", body: JSON.stringify(body) }),
   apiBase: API,
+  // Mata Health AI
+  healthProfileGet: () => request("/health/profile"),
+  healthProfileSave: (body: any) => request("/health/profile", { method: "PUT", body: JSON.stringify(body) }),
+  healthChat: (body: { message: string; history: any[] }) =>
+    request("/health/chat", { method: "POST", body: JSON.stringify(body) }),
+  healthScan: (body: { image: string; area: string }) =>
+    request("/health/scan", { method: "POST", body: JSON.stringify(body) }),
+  healthVitals: (body: { kind: string; value?: number; note?: string; data?: any }) =>
+    request("/health/vitals", { method: "POST", body: JSON.stringify(body) }),
+  healthEntries: (days = 30) => request(`/health/entries?days=${days}`),
+  healthWeeklyReport: () => request("/health/report/weekly"),
+  healthWellness: () => request("/health/wellness"),
+  healthDeleteData: () => request("/health/data", { method: "DELETE" }),
   // billing
   tiers: () => request("/billing/tiers", {}, false),
   adRewardStatus: () => request("/billing/ad-reward/status"),

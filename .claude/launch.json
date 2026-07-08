@@ -1,0 +1,27 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "frontend-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 3000,
+      "cwd": "frontend"
+    },
+    {
+      "name": "music-studio",
+      "runtimeExecutable": "venv/Scripts/python.exe",
+      "runtimeArgs": ["server.py"],
+      "port": 8765,
+      "cwd": "music-studio"
+    },
+    {
+      "name": "mata-backend-dev",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "uvicorn", "run:app", "--host", "0.0.0.0", "--port", "8000"],
+      "port": 8000,
+      "cwd": "backend",
+      "env": { "SERVICE": "devserver", "DEV_INMEMORY": "1", "DATABASE_URL": "sqlite+aiosqlite:///./mata_dev.db" }
+    }
+  ]
+}
