@@ -1,7 +1,7 @@
 // Service worker mínimo y seguro para que MATA AI sea instalable (PWA).
 // Estrategia: network-first para la navegación (siempre la última versión),
 // con respaldo a caché si no hay conexión. No toca las llamadas a la API.
-const CACHE = "mata-ai-v1";
+const CACHE = "mata-ai-v2";
 const OFFLINE_URLS = ["/", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png"];
 
 self.addEventListener("install", (event) => {

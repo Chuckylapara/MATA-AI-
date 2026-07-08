@@ -193,22 +193,30 @@ function resizeFile(file: File, max = 900): Promise<string> {
   });
 }
 
+const LIVE_INTERVAL_MS = 6000; // fastest realistic cadence: each AI vision call takes 3-8s + avoids 429s
+
 function Scanner({ onEmergency }: { onEmergency: (m: string | null) => void }) {
   const [area, setArea] = useState("rostro");
   const [preview, setPreview] = useState("");
   const [result, setResult] = useState<any>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [scanCount, setScanCount] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [camOn, setCamOn] = useState(false);
   const [camReady, setCamReady] = useState(false);
+  const [live, setLive] = useState(false);
+  const liveRef = useRef(false); // avoids stale closures inside the async loop
+  const areaRef = useRef(area);
+  areaRef.current = area;
 
   async function analyzeDataUrl(dataUrl: string, forArea: string) {
-    setErr(""); setBusy(true); setResult(null);
+    setErr(""); setBusy(true);
     try {
       const r = await api.healthScan({ image: dataUrl, area: forArea });
       setResult(r);
+      setScanCount((c) => c + 1);
       if (r.severity === "urgent") onEmergency(`Escáner (${forArea}): ${r.recommendation}`);
     } catch (e: any) {
       setErr(e.message || "Error al analizar la imagen. Vuelve a intentarlo.");
@@ -217,8 +225,22 @@ function Scanner({ onEmergency }: { onEmergency: (m: string | null) => void }) {
     }
   }
 
+  function grabFrame(): string | null {
+    const v = videoRef.current;
+    if (!v || !v.videoWidth || !v.videoHeight) return null;
+    const canvas = document.createElement("canvas");
+    const max = 900;
+    const scale = Math.min(1, max / Math.max(v.videoWidth, v.videoHeight));
+    canvas.width = Math.round(v.videoWidth * scale);
+    canvas.height = Math.round(v.videoHeight * scale);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/jpeg", 0.8);
+  }
+
   async function openCamera() {
-    setErr(""); setResult(null); setCamReady(false);
+    setErr(""); setCamReady(false);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 960 } },
@@ -236,9 +258,11 @@ function Scanner({ onEmergency }: { onEmergency: (m: string | null) => void }) {
       } else {
         v.onloadedmetadata = () => setCamReady(true);
       }
+      return true;
     } catch {
       setErr("No se pudo acceder a la cámara. Revisa que le diste permiso de cámara a esta app en el navegador.");
       closeCamera();
+      return false;
     }
   }
 
@@ -249,25 +273,45 @@ function Scanner({ onEmergency }: { onEmergency: (m: string | null) => void }) {
     setCamReady(false);
   }
 
-  async function capture() {
-    const v = videoRef.current;
-    if (!v || !v.videoWidth || !v.videoHeight) {
-      setErr("La cámara todavía no está lista, espera un segundo e intenta de nuevo.");
-      return;
+  async function waitForCamReady(timeoutMs = 8000): Promise<boolean> {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      const v = videoRef.current;
+      if (v && v.videoWidth > 0) return true;
+      await new Promise((r) => setTimeout(r, 150));
     }
-    const canvas = document.createElement("canvas");
-    const max = 900;
-    const scale = Math.min(1, max / Math.max(v.videoWidth, v.videoHeight));
-    canvas.width = Math.round(v.videoWidth * scale);
-    canvas.height = Math.round(v.videoHeight * scale);
-    const ctx = canvas.getContext("2d");
-    if (!ctx) { setErr("No se pudo capturar la imagen."); return; }
-    ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
-    setPreview(dataUrl);
+    return false;
+  }
+
+  async function runLiveLoop() {
+    while (liveRef.current) {
+      const ready = await waitForCamReady();
+      if (!liveRef.current) break;
+      if (ready) {
+        const frame = grabFrame();
+        if (frame) {
+          setPreview(frame);
+          await analyzeDataUrl(frame, areaRef.current);
+        }
+      }
+      if (!liveRef.current) break;
+      await new Promise((r) => setTimeout(r, LIVE_INTERVAL_MS));
+    }
+  }
+
+  async function startLive() {
+    setErr(""); setResult(null); setScanCount(0);
+    const ok = await openCamera();
+    if (!ok) return;
+    liveRef.current = true;
+    setLive(true);
+    runLiveLoop();
+  }
+
+  function stopLive() {
+    liveRef.current = false;
+    setLive(false);
     closeCamera();
-    // Analiza al instante, sin pasos extra.
-    await analyzeDataUrl(dataUrl, area);
   }
 
   async function onFile(file: File | null) {
@@ -286,6 +330,8 @@ function Scanner({ onEmergency }: { onEmergency: (m: string | null) => void }) {
     if (!preview) { setErr("Toma o sube una foto primero."); return; }
     await analyzeDataUrl(preview, area);
   }
+
+  useEffect(() => () => { liveRef.current = false; closeCamera(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const severityStyle: Record<string, string> = {
     normal: "text-emerald-300 border-emerald-500/30 bg-emerald-950/30",
@@ -318,22 +364,30 @@ function Scanner({ onEmergency }: { onEmergency: (m: string | null) => void }) {
                 Iniciando cámara…
               </div>
             )}
+            {live && camReady && (
+              <div className="absolute top-2 right-2 flex items-center gap-1.5 bg-black/60 rounded-full px-2.5 py-1">
+                <span className={`w-2 h-2 rounded-full ${busy ? "bg-amber-400 animate-pulse" : "bg-red-500 animate-pulse"}`} />
+                <span className="text-[11px] text-white/80">{busy ? "analizando…" : "en vivo"}</span>
+              </div>
+            )}
           </div>
-          <div className="flex gap-2">
-            <button onClick={capture} disabled={!camReady} className="btn flex-1 py-3 disabled:opacity-50">
-              📸 Capturar y analizar
-            </button>
-            <button onClick={closeCamera} className="btn-glass px-4 py-3">Cancelar</button>
-          </div>
+          <button onClick={stopLive} className="btn-glass w-full py-3">⏹️ Detener cámara en vivo</button>
         </div>
       ) : (
         <div className="flex gap-2">
-          <button onClick={openCamera} className="btn flex-1 py-3">📷 Usar cámara</button>
+          <button onClick={startLive} className="btn flex-1 py-3">🔴 Cámara en vivo (automática)</button>
           <label className="btn-glass flex-1 py-3 text-center cursor-pointer">
             🖼️ Subir foto
             <input type="file" accept="image/*" className="hidden" onChange={(e) => onFile(e.target.files?.[0] || null)} />
           </label>
         </div>
+      )}
+
+      {live && (
+        <p className="text-center text-white/40 text-xs">
+          Analizando tu {AREAS.find(([id]) => id === area)?.[1].toLowerCase() || "rostro"} automáticamente cada ~
+          {LIVE_INTERVAL_MS / 1000}s · {scanCount} análisis hechos
+        </p>
       )}
 
       {preview && !camOn && (
@@ -347,7 +401,7 @@ function Scanner({ onEmergency }: { onEmergency: (m: string | null) => void }) {
         </button>
       )}
 
-      {busy && <p className="text-center text-cyan-300 text-sm">Analizando con IA…</p>}
+      {busy && !live && <p className="text-center text-cyan-300 text-sm">Analizando con IA…</p>}
 
       {err && <p className="text-sm text-red-300">{err}</p>}
 
