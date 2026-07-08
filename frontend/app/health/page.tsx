@@ -439,10 +439,53 @@ function Scanner({ onEmergency }: { onEmergency: (m: string | null) => void }) {
       {err && <p className="text-sm text-red-300">{err}</p>}
 
       {result && (
-        <div className={`rounded-xl border px-4 py-3 space-y-2 ${severityStyle[result.severity] || severityStyle.watch}`}>
-          <p className="text-xs uppercase tracking-wide opacity-70">Severidad: {result.severity}</p>
-          <p className="text-sm text-white/90">{result.observations}</p>
-          <p className="text-sm font-medium">{result.recommendation}</p>
+        <div className="space-y-3">
+          <div className={`rounded-xl border px-4 py-3 space-y-2 ${severityStyle[result.severity] || severityStyle.watch}`}>
+            <p className="text-xs uppercase tracking-wide opacity-70">Severidad: {result.severity}</p>
+            <p className="text-sm text-white/90">{result.observations}</p>
+            {result.recommendation && <p className="text-sm font-medium">{result.recommendation}</p>}
+          </div>
+
+          {result.details && (
+            <div className="grid grid-cols-2 gap-2">
+              {(
+                [
+                  ["piel", "🧴 Piel"],
+                  ["ojos", "👁️ Ojos"],
+                  ["labios", "💋 Labios"],
+                  ["senales_cansancio", "😴 Energía"],
+                ] as const
+              ).map(([key, label]) =>
+                result.details[key] ? (
+                  <div key={key} className="bg-black/30 border border-white/10 rounded-xl px-3 py-2.5">
+                    <p className="text-white/50 text-[11px] mb-0.5">{label}</p>
+                    <p className="text-white/90 text-xs leading-snug">{result.details[key]}</p>
+                  </div>
+                ) : null
+              )}
+            </div>
+          )}
+
+          {result.wellness_tips && (
+            <div className="space-y-2">
+              <p className="text-white/60 text-xs font-medium">✨ Para verte y sentirte mejor</p>
+              {(
+                [
+                  ["hidratacion", "💧 Hidratación"],
+                  ["sueno", "😴 Sueño"],
+                  ["alimentacion", "🥗 Alimentación"],
+                  ["cuidado_piel", "🧴 Cuidado de piel"],
+                ] as const
+              ).map(([key, label]) =>
+                result.wellness_tips[key] ? (
+                  <div key={key} className="bg-emerald-950/20 border border-emerald-500/20 rounded-xl px-3 py-2.5">
+                    <p className="text-emerald-300/80 text-[11px] mb-0.5">{label}</p>
+                    <p className="text-white/90 text-xs leading-snug">{result.wellness_tips[key]}</p>
+                  </div>
+                ) : null
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

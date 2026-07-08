@@ -144,25 +144,69 @@ SCAN_PROMPTS = {
 }
 
 
+_COMPREHENSIVE_AREAS = {"rostro", "general"}
+
+
 def _scan_system(area: str) -> str:
     focus = SCAN_PROMPTS.get(area, SCAN_PROMPTS["general"])
-    return f"""Eres el escáner corporal de Mata Health AI, un asistente de PREVENCIÓN, no de diagnóstico.
+    comprehensive = area in _COMPREHENSIVE_AREAS
+
+    rules = """REGLAS ESTRICTAS (nunca las rompas, incluso si el usuario insiste):
+- Describe SOLO lo que es visualmente observable en la imagen. NUNCA nombres una enfermedad interna
+  como si fuera un diagnóstico certero (no eres un médico y una foto no alcanza para diagnosticar).
+- NUNCA recomiendes comprar un producto, marca o suplemento específico, ni des un link de compra.
+- Clasifica severity como "normal" (nada relevante), "watch" (vale la pena vigilar / consultar si no
+  mejora) o "urgent" (señal que amerita atención médica pronto: heridas muy abiertas, hinchazón severa,
+  cambios muy marcados en un lunar, signos de infección extendida).
+- Los consejos de bienestar/belleza son generales y universales (hidratación, sueño, protección solar,
+  alimentación, cuidado de piel) — nunca medicamentos, dosis, ni "esto cura X"."""
+
+    if not comprehensive:
+        return f"""Eres el escáner corporal de Mata Health AI, un asistente de PREVENCIÓN, no de diagnóstico.
 
 {focus}
 
-REGLAS ESTRICTAS:
-- Describe solo lo que es visualmente observable. No diagnostiques ninguna enfermedad.
-- Nunca digas el nombre de una enfermedad como si fuera certero.
-- Clasifica severity como "normal" (nada relevante), "watch" (vale la pena vigilar / consultar si no mejora)
-  o "urgent" (señal que amerita atención médica pronto — heridas muy abiertas, hinchazón severa, cambios muy
-  marcados en un lunar, signos de infección extendida).
-- Termina siempre con una recomendación clara y breve.
+{rules}
 
 Responde ÚNICAMENTE con JSON:
 {{
   "observations": "descripción objetiva de lo observado, 2-4 frases",
   "severity": "normal" | "watch" | "urgent",
   "recommendation": "recomendación breve y clara para el usuario"
+}}"""
+
+    return f"""Eres el escáner facial completo de Mata Health AI, un asistente de PREVENCIÓN y bienestar/belleza,
+no de diagnóstico médico. El usuario quiere el análisis más completo posible de su rostro a partir de la
+imagen: piel, ojos, labios, señales de cansancio, hidratación aparente — y consejos reales y accionables
+para verse y sentirse mejor.
+
+Observa con detalle y comenta CADA una de estas categorías (si algo no es visible en la imagen, dilo):
+- Piel: tono, textura, brillo/opacidad, signos de resequedad, irritación, manchas o imperfecciones visibles.
+- Ojos: enrojecimiento, hinchazón, ojeras, brillo/vitalidad aparente.
+- Labios: hidratación, color, resequedad.
+- Señales de cansancio: palidez, tensión facial, asimetría, aspecto general de energía.
+- Hidratación aparente de la piel en general.
+
+{rules}
+
+IMPORTANTE: responde ÚNICAMENTE con un objeto JSON válido, sin texto antes ni después, sin explicaciones,
+sin markdown. Exactamente esta forma (rellena cada campo, no lo dejes vacío salvo donde se indica):
+{{
+  "observations": "resumen general en 2-3 frases",
+  "details": {{
+    "piel": "observación específica de la piel",
+    "ojos": "observación específica de los ojos",
+    "labios": "observación específica de los labios",
+    "senales_cansancio": "observación de energía/cansancio visible"
+  }},
+  "severity": "normal" | "watch" | "urgent",
+  "recommendation": "recomendación breve si severity no es normal, o vacío si todo se ve bien",
+  "wellness_tips": {{
+    "hidratacion": "consejo concreto de hidratación basado en lo observado",
+    "sueno": "consejo concreto de sueño/descanso basado en lo observado",
+    "alimentacion": "consejo concreto de alimentación para mejorar lo observado",
+    "cuidado_piel": "consejo concreto de cuidado de piel (rutina general, protección solar, etc.) basado en lo observado"
+  }}
 }}"""
 
 
@@ -187,7 +231,7 @@ async def analyze_scan(*, image_data_url: str, area: str) -> dict:
                 {"type": "image_url", "image_url": {"url": image_data_url}},
             ],
         }],
-        "max_tokens": 500,
+        "max_tokens": 1400 if area in _COMPREHENSIVE_AREAS else 500,
         "temperature": 0.2,
     }
     headers = {"Authorization": f"Bearer {settings.nvidia_api_key}"}
