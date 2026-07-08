@@ -7,6 +7,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from mata.common.config import settings
 from mata.common.models import Tier, UsageEvent, User
 
 # Credit cost per unit of work, by module.
@@ -57,6 +58,7 @@ class Reservation:
     user_id: str
     module: str
     amount: int
+    unlimited: bool = False  # owner accounts (settings.unlimited_emails) never spend real credits
 
 
 async def get_balance(db: AsyncSession, user_id: str) -> int:
@@ -70,7 +72,15 @@ async def get_balance(db: AsyncSession, user_id: str) -> int:
 async def authorize(db: AsyncSession, user_id: str, module: str, units: int = 1) -> Reservation:
     """Reserve credits before doing work. Raises 402 if insufficient."""
     amount = CREDIT_COSTS.get(module, 1) * units
-    balance = await get_balance(db, user_id)
+    res = await db.execute(select(User.email, User.credits).where(User.id == user_id))
+    row = res.one_or_none()
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+    email, balance = row
+
+    if email and email.lower() in settings.unlimited_email_set:
+        return Reservation(user_id=user_id, module=module, amount=amount, unlimited=True)
+
     if balance < amount:
         raise HTTPException(
             status.HTTP_402_PAYMENT_REQUIRED,
@@ -89,16 +99,17 @@ async def settle(
     meta: dict | None = None,
 ) -> None:
     """Reconcile the reservation against the real cost and log the usage event."""
-    delta = reservation.amount - actual_amount  # positive => refund
-    if delta:
-        await db.execute(
-            update(User).where(User.id == reservation.user_id).values(credits=User.credits + delta)
-        )
+    if not reservation.unlimited:
+        delta = reservation.amount - actual_amount  # positive => refund
+        if delta:
+            await db.execute(
+                update(User).where(User.id == reservation.user_id).values(credits=User.credits + delta)
+            )
     db.add(
         UsageEvent(
             user_id=reservation.user_id,
             module=reservation.module,
-            credits=actual_amount,
+            credits=0 if reservation.unlimited else actual_amount,
             tokens=tokens,
             meta=meta or {},
         )
@@ -107,6 +118,8 @@ async def settle(
 
 async def refund(db: AsyncSession, reservation: Reservation) -> None:
     """Full refund on failure."""
+    if reservation.unlimited:
+        return
     await db.execute(
         update(User).where(User.id == reservation.user_id).values(credits=User.credits + reservation.amount)
     )

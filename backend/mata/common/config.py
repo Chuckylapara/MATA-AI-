@@ -93,6 +93,13 @@ class Settings(BaseSettings):
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
+    # --- Accounts exempt from the credit system (owner accounts, no spending cap) ---
+    unlimited_emails: str = "drew@mata-ai.app,admin@mata-ai.app"
+
+    @property
+    def unlimited_email_set(self) -> set[str]:
+        return {e.strip().lower() for e in self.unlimited_emails.split(",") if e.strip()}
+
 
 @lru_cache
 def get_settings() -> Settings:
