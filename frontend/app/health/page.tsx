@@ -194,7 +194,7 @@ function resizeFile(file: File, max = 900): Promise<string> {
 }
 
 function Scanner({ onEmergency }: { onEmergency: (m: string | null) => void }) {
-  const [area, setArea] = useState("general");
+  const [area, setArea] = useState("rostro");
   const [preview, setPreview] = useState("");
   const [result, setResult] = useState<any>(null);
   const [busy, setBusy] = useState(false);
@@ -202,16 +202,43 @@ function Scanner({ onEmergency }: { onEmergency: (m: string | null) => void }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [camOn, setCamOn] = useState(false);
+  const [camReady, setCamReady] = useState(false);
+
+  async function analyzeDataUrl(dataUrl: string, forArea: string) {
+    setErr(""); setBusy(true); setResult(null);
+    try {
+      const r = await api.healthScan({ image: dataUrl, area: forArea });
+      setResult(r);
+      if (r.severity === "urgent") onEmergency(`Escáner (${forArea}): ${r.recommendation}`);
+    } catch (e: any) {
+      setErr(e.message || "Error al analizar la imagen. Vuelve a intentarlo.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function openCamera() {
-    setErr("");
+    setErr(""); setResult(null); setCamReady(false);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 960 } },
+      });
       streamRef.current = stream;
-      if (videoRef.current) videoRef.current.srcObject = stream;
       setCamOn(true);
+      // videoRef only exists once camOn renders the <video> — wait a tick.
+      await new Promise((r) => setTimeout(r, 0));
+      const v = videoRef.current;
+      if (!v) throw new Error("no video element");
+      v.srcObject = stream;
+      await v.play().catch(() => {});
+      if (v.readyState >= 2 && v.videoWidth > 0) {
+        setCamReady(true);
+      } else {
+        v.onloadedmetadata = () => setCamReady(true);
+      }
     } catch {
-      setErr("No se pudo acceder a la cámara. Revisa los permisos del navegador.");
+      setErr("No se pudo acceder a la cámara. Revisa que le diste permiso de cámara a esta app en el navegador.");
+      closeCamera();
     }
   }
 
@@ -219,26 +246,37 @@ function Scanner({ onEmergency }: { onEmergency: (m: string | null) => void }) {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     setCamOn(false);
+    setCamReady(false);
   }
 
-  function capture() {
-    if (!videoRef.current) return;
+  async function capture() {
     const v = videoRef.current;
+    if (!v || !v.videoWidth || !v.videoHeight) {
+      setErr("La cámara todavía no está lista, espera un segundo e intenta de nuevo.");
+      return;
+    }
     const canvas = document.createElement("canvas");
     const max = 900;
     const scale = Math.min(1, max / Math.max(v.videoWidth, v.videoHeight));
-    canvas.width = v.videoWidth * scale;
-    canvas.height = v.videoHeight * scale;
-    canvas.getContext("2d")!.drawImage(v, 0, 0, canvas.width, canvas.height);
-    setPreview(canvas.toDataURL("image/jpeg", 0.85));
+    canvas.width = Math.round(v.videoWidth * scale);
+    canvas.height = Math.round(v.videoHeight * scale);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) { setErr("No se pudo capturar la imagen."); return; }
+    ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+    setPreview(dataUrl);
     closeCamera();
+    // Analiza al instante, sin pasos extra.
+    await analyzeDataUrl(dataUrl, area);
   }
 
   async function onFile(file: File | null) {
     setErr(""); setResult(null);
     if (!file) return;
     try {
-      setPreview(await resizeFile(file));
+      const dataUrl = await resizeFile(file);
+      setPreview(dataUrl);
+      await analyzeDataUrl(dataUrl, area);
     } catch {
       setErr("No se pudo leer la imagen.");
     }
@@ -246,16 +284,7 @@ function Scanner({ onEmergency }: { onEmergency: (m: string | null) => void }) {
 
   async function analyze() {
     if (!preview) { setErr("Toma o sube una foto primero."); return; }
-    setErr(""); setBusy(true); setResult(null);
-    try {
-      const r = await api.healthScan({ image: preview, area });
-      setResult(r);
-      if (r.severity === "urgent") onEmergency(`Escáner (${area}): ${r.recommendation}`);
-    } catch (e: any) {
-      setErr(e.message || "Error al analizar la imagen.");
-    } finally {
-      setBusy(false);
-    }
+    await analyzeDataUrl(preview, area);
   }
 
   const severityStyle: Record<string, string> = {
@@ -282,9 +311,18 @@ function Scanner({ onEmergency }: { onEmergency: (m: string | null) => void }) {
 
       {camOn ? (
         <div className="space-y-2">
-          <video ref={videoRef} autoPlay playsInline muted className="w-full rounded-xl max-h-72 object-cover" />
+          <div className="relative">
+            <video ref={videoRef} autoPlay playsInline muted className="w-full rounded-xl max-h-72 object-cover bg-black/40" />
+            {!camReady && (
+              <div className="absolute inset-0 flex items-center justify-center text-white/60 text-sm">
+                Iniciando cámara…
+              </div>
+            )}
+          </div>
           <div className="flex gap-2">
-            <button onClick={capture} className="btn flex-1 py-3">📸 Capturar</button>
+            <button onClick={capture} disabled={!camReady} className="btn flex-1 py-3 disabled:opacity-50">
+              📸 Capturar y analizar
+            </button>
             <button onClick={closeCamera} className="btn-glass px-4 py-3">Cancelar</button>
           </div>
         </div>
@@ -303,11 +341,13 @@ function Scanner({ onEmergency }: { onEmergency: (m: string | null) => void }) {
         <img src={preview} alt="preview" className="max-h-64 mx-auto rounded-xl" />
       )}
 
-      {preview && !camOn && (
+      {preview && !camOn && !busy && (
         <button onClick={analyze} disabled={busy} className="btn w-full py-3 disabled:opacity-50">
-          {busy ? "Analizando…" : "Analizar con IA"}
+          🔄 Analizar de nuevo
         </button>
       )}
+
+      {busy && <p className="text-center text-cyan-300 text-sm">Analizando con IA…</p>}
 
       {err && <p className="text-sm text-red-300">{err}</p>}
 
