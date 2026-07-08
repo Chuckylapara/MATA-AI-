@@ -252,7 +252,7 @@ function Scanner({ onEmergency }: { onEmergency: (m: string | null) => void }) {
     }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 960 } },
+        video: { facingMode: { ideal: "user" }, width: { ideal: 1280 }, height: { ideal: 960 } },
       });
       streamRef.current = stream;
       v.srcObject = stream;
@@ -276,7 +276,7 @@ function Scanner({ onEmergency }: { onEmergency: (m: string | null) => void }) {
       // Fallback: retry once with no constraints beyond "any camera" (helps on some Android/desktop combos).
       if (name === "OverconstrainedError") {
         try {
-          const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
           streamRef.current = stream;
           v.srcObject = stream;
           setCamOn(true);
@@ -390,7 +390,7 @@ function Scanner({ onEmergency }: { onEmergency: (m: string | null) => void }) {
           de carrera que hacía fallar el acceso a la cámara. */}
       <div className={camOn ? "space-y-2" : "hidden"}>
         <div className="relative">
-          <video ref={videoRef} autoPlay playsInline muted className="w-full rounded-xl max-h-72 object-cover bg-black/40" />
+          <video ref={videoRef} autoPlay playsInline muted className="w-full rounded-xl max-h-72 object-cover bg-black/40 -scale-x-100" />
           {!camReady && (
             <div className="absolute inset-0 flex items-center justify-center text-white/60 text-sm">
               Iniciando cámara…
