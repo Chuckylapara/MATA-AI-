@@ -8,12 +8,16 @@ adds nuance on top of that net — it never replaces it.
 """
 from __future__ import annotations
 
+import asyncio
+import logging
 import re
 
 import httpx
 
 from mata.common.config import settings
 from mata.common.llm import LLMUnavailable, active_provider, generate_json
+
+log = logging.getLogger("mata.health")
 
 SAFETY_DISCLAIMER = (
     "Esto no es un diagnóstico médico. Es una orientación preventiva generada por IA. "
@@ -191,12 +195,27 @@ async def analyze_scan(*, image_data_url: str, area: str) -> dict:
     # NVIDIA's OpenAI-compatible endpoint takes system as a separate message.
     payload["messages"].insert(0, {"role": "system", "content": system})
 
+    resp = None
     async with httpx.AsyncClient(timeout=120) as client:
-        resp = await client.post(
-            "https://integrate.api.nvidia.com/v1/chat/completions", headers=headers, json=payload
-        )
-    if resp.status_code != 200:
-        return _mock_scan(area, "No se pudo analizar la imagen (el servicio de visión no respondió). Prueba con otra foto.")
+        for attempt in range(2):  # one retry — free-tier rate limits (429) are often transient
+            try:
+                resp = await client.post(
+                    "https://integrate.api.nvidia.com/v1/chat/completions", headers=headers, json=payload
+                )
+            except httpx.HTTPError as exc:
+                log.warning("health scan: NVIDIA request failed (attempt %s): %s", attempt, exc)
+                resp = None
+                continue
+            if resp.status_code == 200:
+                break
+            log.warning("health scan: NVIDIA returned %s: %s", resp.status_code, resp.text[:300])
+            if resp.status_code == 429 and attempt == 0:
+                await asyncio.sleep(2)
+
+    if resp is None or resp.status_code != 200:
+        reason = "El servicio de visión está muy demandado en este momento." if resp is not None and resp.status_code == 429 \
+            else "No se pudo analizar la imagen (el servicio de visión no respondió)."
+        return _mock_scan(area, f"{reason} Prueba con otra foto en unos segundos.")
     raw = resp.json()["choices"][0]["message"]["content"]
     try:
         from mata.common.llm import _extract_json
