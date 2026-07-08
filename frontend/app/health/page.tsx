@@ -241,17 +241,22 @@ function Scanner({ onEmergency }: { onEmergency: (m: string | null) => void }) {
 
   async function openCamera() {
     setErr(""); setCamReady(false);
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      setErr("Este navegador no permite acceso a la cámara (o la página no está en HTTPS).");
+      return false;
+    }
+    const v = videoRef.current;
+    if (!v) {
+      setErr("Error interno: no se encontró el elemento de video. Recarga la página e intenta de nuevo.");
+      return false;
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 960 } },
       });
       streamRef.current = stream;
-      setCamOn(true);
-      // videoRef only exists once camOn renders the <video> — wait a tick.
-      await new Promise((r) => setTimeout(r, 0));
-      const v = videoRef.current;
-      if (!v) throw new Error("no video element");
       v.srcObject = stream;
+      setCamOn(true);
       await v.play().catch(() => {});
       if (v.readyState >= 2 && v.videoWidth > 0) {
         setCamReady(true);
@@ -259,8 +264,33 @@ function Scanner({ onEmergency }: { onEmergency: (m: string | null) => void }) {
         v.onloadedmetadata = () => setCamReady(true);
       }
       return true;
-    } catch {
-      setErr("No se pudo acceder a la cámara. Revisa que le diste permiso de cámara a esta app en el navegador.");
+    } catch (e: any) {
+      const name = e?.name || "";
+      const messages: Record<string, string> = {
+        NotAllowedError: "Bloqueaste el permiso de cámara para esta app. Ve a la configuración del sitio en tu navegador y permite la cámara para mata-ai-236ad.web.app, luego recarga la página.",
+        NotFoundError: "No se encontró ninguna cámara en este dispositivo.",
+        NotReadableError: "La cámara está siendo usada por otra app. Ciérrala e intenta de nuevo.",
+        OverconstrainedError: "La cámara no soporta la configuración pedida. Probando de nuevo con ajustes básicos…",
+        SecurityError: "El navegador bloqueó la cámara por seguridad (requiere HTTPS, que ya tenemos, o el permiso está deshabilitado a nivel del sistema operativo).",
+      };
+      // Fallback: retry once with no constraints beyond "any camera" (helps on some Android/desktop combos).
+      if (name === "OverconstrainedError") {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+          streamRef.current = stream;
+          v.srcObject = stream;
+          setCamOn(true);
+          await v.play().catch(() => {});
+          setCamReady(v.readyState >= 2 && v.videoWidth > 0);
+          if (!(v.readyState >= 2 && v.videoWidth > 0)) v.onloadedmetadata = () => setCamReady(true);
+          return true;
+        } catch (e2: any) {
+          setErr(messages[e2?.name] || `No se pudo acceder a la cámara (${e2?.name || e2?.message || "error desconocido"}).`);
+          closeCamera();
+          return false;
+        }
+      }
+      setErr(messages[name] || `No se pudo acceder a la cámara (${name || e?.message || "error desconocido"}).`);
       closeCamera();
       return false;
     }
@@ -355,25 +385,28 @@ function Scanner({ onEmergency }: { onEmergency: (m: string | null) => void }) {
         ))}
       </div>
 
-      {camOn ? (
-        <div className="space-y-2">
-          <div className="relative">
-            <video ref={videoRef} autoPlay playsInline muted className="w-full rounded-xl max-h-72 object-cover bg-black/40" />
-            {!camReady && (
-              <div className="absolute inset-0 flex items-center justify-center text-white/60 text-sm">
-                Iniciando cámara…
-              </div>
-            )}
-            {live && camReady && (
-              <div className="absolute top-2 right-2 flex items-center gap-1.5 bg-black/60 rounded-full px-2.5 py-1">
-                <span className={`w-2 h-2 rounded-full ${busy ? "bg-amber-400 animate-pulse" : "bg-red-500 animate-pulse"}`} />
-                <span className="text-[11px] text-white/80">{busy ? "analizando…" : "en vivo"}</span>
-              </div>
-            )}
-          </div>
-          <button onClick={stopLive} className="btn-glass w-full py-3">⏹️ Detener cámara en vivo</button>
+      {/* El <video> queda siempre montado (solo oculto) para que la cámara pueda
+          engancharse a él sin esperar un ciclo de render — evita una condición
+          de carrera que hacía fallar el acceso a la cámara. */}
+      <div className={camOn ? "space-y-2" : "hidden"}>
+        <div className="relative">
+          <video ref={videoRef} autoPlay playsInline muted className="w-full rounded-xl max-h-72 object-cover bg-black/40" />
+          {!camReady && (
+            <div className="absolute inset-0 flex items-center justify-center text-white/60 text-sm">
+              Iniciando cámara…
+            </div>
+          )}
+          {live && camReady && (
+            <div className="absolute top-2 right-2 flex items-center gap-1.5 bg-black/60 rounded-full px-2.5 py-1">
+              <span className={`w-2 h-2 rounded-full ${busy ? "bg-amber-400 animate-pulse" : "bg-red-500 animate-pulse"}`} />
+              <span className="text-[11px] text-white/80">{busy ? "analizando…" : "en vivo"}</span>
+            </div>
+          )}
         </div>
-      ) : (
+        <button onClick={stopLive} className="btn-glass w-full py-3">⏹️ Detener cámara en vivo</button>
+      </div>
+
+      {!camOn && (
         <div className="flex gap-2">
           <button onClick={startLive} className="btn flex-1 py-3">🔴 Cámara en vivo (automática)</button>
           <label className="btn-glass flex-1 py-3 text-center cursor-pointer">
