@@ -105,7 +105,7 @@ class Settings(BaseSettings):
     code_model: str = "claude-opus-4-8"
     agent_model: str = "claude-opus-4-8"
     gemini_model: str = "gemini-2.5-flash"
-    nvidia_model: str = "meta/llama-3.1-70b-instruct"
+    nvidia_model: str = "meta/llama-3.3-70b-instruct"
     nvidia_vision_model: str = "meta/llama-3.2-11b-vision-instruct"  # NVIDIA image understanding
     whisper_model: str = "whisper-large-v3"   # used with Groq/OpenAI-compatible STT
     hf_image_model: str = "black-forest-labs/FLUX.1-schnell"  # HF text-to-image
