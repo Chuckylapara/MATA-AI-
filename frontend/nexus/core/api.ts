@@ -5,11 +5,30 @@ export class NexusApiError extends Error {
   constructor(public status: number, message: string) { super(message); }
 }
 
+// ---- Bring your own AI key: kept only in this browser, sent to the user's own NEXUS server with
+// each request (never stored server-side, never committed anywhere).
+const AI_KEY = "nexus_ai_key";
+export const AI_KEY_PREFIXES: [string, string][] = [
+  ["sk-ant-", "Anthropic Claude"], ["nvapi-", "NVIDIA"], ["gsk_", "Groq"], ["AIza", "Google Gemini"], ["sk-", "OpenAI"],
+];
+export function aiKeyProvider(key: string | null): string | null {
+  if (!key || /\s/.test(key) || key.length < 20) return null;
+  return AI_KEY_PREFIXES.find(([p]) => key.startsWith(p))?.[1] ?? null;
+}
+export function getAiKey(): string | null {
+  try { return localStorage.getItem(AI_KEY); } catch { return null; }
+}
+export function setAiKey(key: string | null) {
+  try { if (key) localStorage.setItem(AI_KEY, key.trim()); else localStorage.removeItem(AI_KEY); } catch { /* blocked */ }
+}
+
 async function send(path: string, init: RequestInit = {}): Promise<Response> {
   const go = () => {
     const headers: Record<string, string> = { "Content-Type": "application/json", ...(init.headers as any) };
     const t = getToken();
     if (t) headers.Authorization = `Bearer ${t}`;
+    const k = getAiKey();
+    if (k && aiKeyProvider(k)) headers["X-Nexus-AI-Key"] = k;
     return fetch(`${apiBase()}/nexus${path}`, { ...init, headers });
   };
   if (!getToken()) await ensureSession();

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { NexusAvatar } from "@/nexus/avatar/NexusAvatar";
 import { STATE_PARAMS } from "@/nexus/avatar/states";
-import { converse, nexus } from "@/nexus/core/api";
+import { aiKeyProvider, converse, nexus, setAiKey } from "@/nexus/core/api";
 import { bus } from "@/nexus/core/bus";
 import type { AvatarState, ChatTurn, PendingAction } from "@/nexus/core/types";
 import { AVATAR_STATES } from "@/nexus/core/types";
@@ -98,6 +98,13 @@ export default function NexusPage() {
 
   // ----------------------------------------------------------------- boot
   useEffect(() => {
+    // One-tap setup: a link ending in #key=<provider key> saves the key on this device only.
+    // The fragment never reaches any server; it is removed from the address bar right away.
+    const hashKey = new URLSearchParams(location.hash.slice(1)).get("key");
+    if (hashKey) {
+      history.replaceState(null, "", location.pathname + location.search);
+      if (aiKeyProvider(hashKey)) { setAiKey(hashKey); setTimeout(() => flash(`Clave de ${aiKeyProvider(hashKey)} guardada en este dispositivo ✓`), 800); }
+    }
     const params = new URLSearchParams(location.search);
     const m = params.get("display") === "tv" ? "tv" : "full";
     setMode(m);

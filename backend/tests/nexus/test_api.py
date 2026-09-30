@@ -353,3 +353,10 @@ async def test_registered_users_have_no_guest_cap(client, monkeypatch):
 
     monkeypatch.setattr(settings, "guest_daily_messages", 0)
     assert (await client.post("/converse", json={"text": "hola"})).status_code == 200
+
+
+async def test_status_with_own_key_header(client):
+    r = await client.get("/status", headers={"X-Nexus-AI-Key": "nvapi-" + "z" * 40})
+    body = r.json()
+    assert body["dev_mock_active"] is False and body["models"]["reasoning"]["provider"] == "nvidia"
+    assert (await client.get("/status")).json()["dev_mock_active"] is True

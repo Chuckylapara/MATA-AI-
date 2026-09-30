@@ -129,3 +129,44 @@ def set_router(router: ModelRouter | None) -> None:
     """Test hook."""
     global _router
     _router = router
+
+
+# ----------------------------------------------------------------------------- bring-your-own-key
+# A user can keep their own provider key in their browser; it is sent with each NEXUS request
+# (header X-Nexus-AI-Key) and used only for that request. It is never stored or logged server-side.
+KEY_PREFIXES: list[tuple[str, str]] = [
+    ("sk-ant-", "anthropic"), ("nvapi-", "nvidia"), ("gsk_", "groq"), ("AIza", "gemini"), ("sk-", "openai"),
+]
+_KEY_FIELD = {"anthropic": "anthropic_api_key", "nvidia": "nvidia_api_key", "groq": "groq_api_key",
+              "gemini": "gemini_api_key", "openai": "openai_api_key"}
+_VISION_CAPABLE = {"anthropic", "nvidia", "gemini", "openai"}
+_byok_cache: dict[str, ModelRouter] = {}
+
+
+def detect_provider(key: str | None) -> str | None:
+    if not key:
+        return None
+    key = key.strip()
+    if len(key) < 20 or len(key) > 300 or any(c.isspace() for c in key):
+        return None
+    return next((name for prefix, name in KEY_PREFIXES if key.startswith(prefix)), None)
+
+
+def router_for_key(key: str | None) -> ModelRouter:
+    """The shared router, or one that prefers the caller's own key when a valid one is supplied."""
+    name = detect_provider(key)
+    if not name:
+        return get_router()
+    import hashlib
+
+    digest = hashlib.sha256(key.strip().encode()).hexdigest()
+    if digest in _byok_cache:
+        return _byok_cache[digest]
+    update = {_KEY_FIELD[name]: key.strip(), "nexus_reasoning_provider": name, "nexus_fast_provider": name}
+    if name in _VISION_CAPABLE:
+        update["nexus_vision_provider"] = name
+    router = ModelRouter(cfg=settings.model_copy(update=update))
+    if len(_byok_cache) >= 32:
+        _byok_cache.pop(next(iter(_byok_cache)))
+    _byok_cache[digest] = router
+    return router
