@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { NexusAvatar } from "@/nexus/avatar/NexusAvatar";
 import { STATE_PARAMS } from "@/nexus/avatar/states";
-import { aiKeyProvider, converse, nexus, setAiKey } from "@/nexus/core/api";
+import { aiKeyProvider, converse, getAiKey, nexus, setAiKey } from "@/nexus/core/api";
 import { bus } from "@/nexus/core/bus";
 import type { AvatarState, ChatTurn, PendingAction } from "@/nexus/core/types";
 import { AVATAR_STATES } from "@/nexus/core/types";
@@ -73,6 +73,7 @@ export default function NexusPage() {
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [feed, setFeed] = useState<any[]>([]);
   const [toast, setToast] = useState<string | null>(null);
+  const [serverNotice, setServerNotice] = useState<string | null>(null);
   const [status, setStatus] = useState<any>(null);
   const [name, setName] = useState<string | null>(null);
   const [live, setLive] = useState<LiveMetrics>({ fps: 0, visionFps: 0, latencyMs: null, lastChars: 0, mic: false,
@@ -171,7 +172,12 @@ export default function NexusPage() {
   const refreshFeed = useCallback(() => { nexus.feed().then(setFeed).catch(() => null); }, []);
   useEffect(() => {
     if (!authed || mode === "tv") return;
-    nexus.status().then(setStatus).catch((e) => pushError(String(e.message || e)));
+    nexus.status().then((st) => {
+      setStatus(st);
+      // Own key saved but the server doesn't know about own keys yet → it still runs an old version.
+      if (aiKeyProvider(getAiKey()) && !st.byok) setServerNotice(
+        "Tu servidor todavía tiene una versión antigua y no usa tu clave. En Render pulsa “Manual Deploy → Deploy latest commit” y espera a que diga Live.");
+    }).catch((e) => pushError(String(e.message || e)));
     nexus.profile().then((p) => setName(p.display_name)).catch(() => null);
     nexus.pending().then((p: any[]) => setPending(p.map((x) => ({ action_id: x.id, tool: x.tool, preview: x.preview, reason: x.reason })))).catch(() => null);
     refreshFeed();
@@ -252,6 +258,7 @@ export default function NexusPage() {
           setPending((p) => [...p, d]); bus.emit("CONFIRMATION_REQUIRED", d); break;
         case "error":
           pushError(d.message);
+          setCaption(d.message);
           setTurns((t) => [...t, { id: uid(), role: "system", text: d.message, ts: Date.now(), meta: { error: d.code } }]);
           setState("ERROR");
           break;
@@ -490,6 +497,12 @@ export default function NexusPage() {
 
       {/* ---------------- toasts, auth gate, confirmation */}
       {toast && <div role="status" className="absolute z-40 top-16 left-1/2 -translate-x-1/2 nx-toast">{toast}</div>}
+      {serverNotice && !tv && (
+        <div role="alert" className="absolute z-40 top-16 inset-x-3 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:max-w-lg nx-panel border-amber-300/40 px-4 py-3 text-xs text-amber-100">
+          {serverNotice}
+          <button onClick={() => setServerNotice(null)} className="ml-2 text-amber-300 underline">cerrar</button>
+        </div>
+      )}
       {authed === false && !tv && (
         <div className="absolute z-40 inset-x-0 top-20 flex justify-center px-4">
           <SignIn onDone={() => { setAuthed(true); location.reload(); }} />

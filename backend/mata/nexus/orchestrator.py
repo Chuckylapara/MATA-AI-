@@ -23,6 +23,23 @@ from mata.nexus.security import clamp, scan_injection
 from mata.nexus.tools.base import ToolContext, summarize_for_model
 from mata.nexus.tools.registry import executor, registry
 
+
+def friendly_provider_error(exc: Exception) -> str:
+    """Plain-language reason a real AI provider failed (shown to the user instead of a fake answer)."""
+    msg = str(exc)
+    low = msg.lower()
+    if "401" in msg or "403" in msg or "unauthorized" in low or "forbidden" in low or "invalid api key" in low:
+        hint = "la clave de IA no es válida, está desactivada o no tiene permiso. Revisa o crea una nueva."
+    elif "429" in msg or "rate" in low or "quota" in low:
+        hint = "se alcanzó el límite de uso de la clave. Espera un poco o usa otra clave."
+    elif "network" in low or "timeout" in low or "connect" in low:
+        hint = "no se pudo conectar con el proveedor de IA. Inténtalo de nuevo en un momento."
+    elif "404" in msg or "model" in low:
+        hint = "el modelo de IA solicitado no está disponible para esta clave."
+    else:
+        hint = "el proveedor de IA devolvió un error."
+    return f"No pude responder: {hint} (detalle: {msg[:180]})"
+
 log = logging.getLogger("nexus.orchestrator")
 
 PLAN_SCHEMA = {
@@ -135,8 +152,7 @@ async def run_turn(ctx: ToolContext, profile: NexusProfile, text: str,
                 break  # stop acting until the user confirms
     except ProviderError as exc:
         yield "state", {"state": "ERROR"}
-        yield "error", {"code": "provider_unavailable",
-                        "message": f"No AI provider could answer: {exc}. Check System Health for configuration."}
+        yield "error", {"code": "provider_unavailable", "message": friendly_provider_error(exc)}
         return
 
     # 3) Answer (stream).
@@ -155,7 +171,7 @@ async def run_turn(ctx: ToolContext, profile: NexusProfile, text: str,
                 yield "token", {"text": chunk}
     except ProviderError as exc:
         yield "state", {"state": "ERROR"}
-        yield "error", {"code": "provider_unavailable", "message": str(exc)}
+        yield "error", {"code": "provider_unavailable", "message": friendly_provider_error(exc)}
         return
     reply = "".join(reply_parts).strip()
 
