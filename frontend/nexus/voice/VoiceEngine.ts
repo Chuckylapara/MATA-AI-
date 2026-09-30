@@ -7,6 +7,7 @@
 // exposed — lip-sync is driven by word-boundary events. Phase 4b swaps in Silero VAD +
 // Whisper + Kokoro behind the same class (see docs/nexus/VOICE.md).
 import { bus } from "@/nexus/core/bus";
+import { dedupeRepeats } from "@/nexus/voice/dedupe";
 
 export interface VoiceCallbacks {
   onInterim?: (text: string) => void;
@@ -130,7 +131,9 @@ export class VoiceEngine {
     const SR = w.SpeechRecognition || w.webkitSpeechRecognition;
     const rec = new SR();
     rec.lang = this.lang;
-    rec.continuous = true;
+    // iOS Safari's continuous mode re-delivers earlier words ("qué es lo que qué es lo que…").
+    // There, listen one phrase at a time; onend restarts recognition while the mic is on.
+    rec.continuous = !isIOS();
     rec.interimResults = true;
     rec.maxAlternatives = 1;
     rec.onresult = (e: any) => {
@@ -141,7 +144,7 @@ export class VoiceEngine {
         if (!txt) continue;
         if (r.isFinal) {
           if (this.isEcho(txt)) continue;           // our own TTS picked up by the mic
-          this.handleFinal(txt);
+          this.handleFinal(dedupeRepeats(txt));
         } else {
           interim += txt + " ";
         }
@@ -321,6 +324,11 @@ export class VoiceEngine {
   }
 
   dispose() { this.interrupt(); this.stopListening(); }
+}
+
+function isIOS() {
+  if (typeof navigator === "undefined") return false;
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 }
 
 function clean(s: string) {
