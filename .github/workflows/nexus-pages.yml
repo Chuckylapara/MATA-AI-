@@ -1,6 +1,6 @@
 # Publishes the frontend (including NEXUS at /nexus/) to GitHub Pages on every push to main,
-# so it can be opened from any phone without building on a PC.
-# One-time setup: repo Settings → Pages → Build and deployment → Source: "GitHub Actions".
+# so it can be opened from any phone or PC without building locally.
+# The built site is pushed to the `gh-pages` branch, which GitHub Pages serves.
 # Optional: Settings → Secrets and variables → Actions → Variables → NEXUS_API_URL = your backend URL.
 name: Publish NEXUS (GitHub Pages)
 
@@ -10,16 +10,14 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
   group: pages
   cancel-in-progress: true
 
 jobs:
-  build:
+  publish:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -38,17 +36,13 @@ jobs:
         env:
           NEXT_PUBLIC_BASE_PATH: /${{ github.event.repository.name }}
           NEXT_PUBLIC_API_URL: ${{ vars.NEXUS_API_URL || 'https://mata-ai-backend.onrender.com' }}
-      - run: touch out/.nojekyll
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: frontend/out
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}nexus/
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Push to gh-pages
+        working-directory: frontend/out
+        run: |
+          touch .nojekyll
+          git init -q -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Publish ${GITHUB_SHA::7}"
+          git push -q --force "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" gh-pages

@@ -36,7 +36,7 @@ Wikipedia works out of the box. For general web search add a self-hosted SearXNG
 (`SEARXNG_URL`) or a Tavily key (1,000 free searches/month).
 
 ## Publish from a phone (GitHub Pages, no PC needed)
-1. GitHub → repository **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+1. The workflow publishes to the `gh-pages` branch; if Pages is not on yet, enable it once in **Settings → Pages** (source: `gh-pages` branch).
 2. Merge to `main`. The workflow `.github/workflows/nexus-pages.yml` tests, builds and publishes.
 3. Open `https://<user>.github.io/<repo>/nexus/`, create an account on the NEXUS screen.
 4. If it can't reach the server, tap **Servidor** on the sign-in card and enter your backend URL
