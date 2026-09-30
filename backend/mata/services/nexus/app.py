@@ -9,7 +9,7 @@ import os
 from collections.abc import AsyncIterator
 from datetime import datetime, timezone
 
-from fastapi import Depends, HTTPException, Query, status
+from fastapi import Depends, Header, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, select
@@ -47,7 +47,7 @@ from mata.nexus.models import (
 )
 from mata.nexus.orchestrator import run_turn
 from mata.nexus.permissions import Capability, PermissionManager
-from mata.nexus.router import get_router
+from mata.nexus.router import detect_provider, get_router, router_for_key
 from mata.nexus.scheduler import run_task, scheduler_loop
 from mata.nexus.security import MAX_MESSAGE_CHARS
 from mata.nexus.tools.base import ToolContext
@@ -88,8 +88,8 @@ def _profile_dict(p: NexusProfile) -> dict:
             "memory_enabled": p.memory_enabled, "preferences": p.preferences or {}}
 
 
-def _ctx(db: AsyncSession, identity: Identity, profile: NexusProfile, emit=None) -> ToolContext:
-    router = get_router()
+def _ctx(db: AsyncSession, identity: Identity, profile: NexusProfile, emit=None, router=None) -> ToolContext:
+    router = router or get_router()
     return ToolContext(db=db, user_id=identity.user_id, router=router,
                        memory=MemoryEngine(db, identity.user_id, Embedder(router)),
                        memory_enabled=profile.memory_enabled, emit=emit)
@@ -102,8 +102,8 @@ def _sse(event: str, data: dict) -> str:
 # ----------------------------------------------------------------------------- status
 
 @app.get("/status")
-async def status_(identity: Identity = Depends(get_identity)):
-    router = get_router()
+async def status_(identity: Identity = Depends(get_identity), x_nexus_ai_key: str | None = Header(default=None)):
+    router = router_for_key(x_nexus_ai_key)
     return {
         "name": "NEXUS", "version": "0.1.0", "models": router.describe(), "dev_mock_active": router.using_mock,
         "tools": len(registry.all()), "tools_available": len(registry.available()),
@@ -142,8 +142,11 @@ async def _guest_over_limit(identity: Identity) -> bool:
 
 
 @app.post("/converse")
-async def converse(body: ConverseBody, identity: Identity = Depends(get_identity)):
-    if await _guest_over_limit(identity):
+async def converse(body: ConverseBody, identity: Identity = Depends(get_identity),
+                   x_nexus_ai_key: str | None = Header(default=None)):
+    router = router_for_key(x_nexus_ai_key)
+    # The guest budget protects the server's keys; people using their own key are not capped.
+    if not detect_provider(x_nexus_ai_key) and await _guest_over_limit(identity):
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS,
                             "Límite diario de mensajes como invitado alcanzado. Vuelve mañana o crea una cuenta.")
     async def stream() -> AsyncIterator[str]:
@@ -172,7 +175,7 @@ async def converse(body: ConverseBody, identity: Identity = Depends(get_identity
                                if m.role in ("user", "assistant")]
                     db.add(Message(conversation_id=convo.id, role="user", content=body.text))
                     await emit("conversation", {"conversation_id": convo.id})
-                    ctx = _ctx(db, identity, profile, emit)
+                    ctx = _ctx(db, identity, profile, emit, router=router)
                     reply = ""
                     async for event, data in run_turn(ctx, profile, body.text, history):
                         if event == "done":
@@ -214,7 +217,8 @@ class VisionBody(BaseModel):
 
 
 @app.post("/vision/ask")
-async def vision_ask(body: VisionBody, identity: Identity = Depends(get_identity), db: AsyncSession = Depends(get_db)):
+async def vision_ask(body: VisionBody, identity: Identity = Depends(get_identity), db: AsyncSession = Depends(get_db),
+                     x_nexus_ai_key: str | None = Header(default=None)):
     if body.mime not in ("image/jpeg", "image/png", "image/webp"):
         raise HTTPException(400, "Unsupported image type")
     try:
@@ -224,7 +228,7 @@ async def vision_ask(body: VisionBody, identity: Identity = Depends(get_identity
     perms = PermissionManager(db, identity.user_id)
     if (await perms.check(Capability.CAMERA)).value == "deny":
         raise HTTPException(403, "Camera permission is set to Deny in NEXUS settings")
-    router = get_router()
+    router = router_for_key(x_nexus_ai_key)
     if router.primary("vision") is None:
         return {"ok": False, "error_code": "integration_not_configured",
                 "error": "No vision model configured.",
@@ -693,8 +697,9 @@ async def system_hardware(identity: Identity = Depends(get_identity)):
 
 
 @app.get("/system/health")
-async def system_health(identity: Identity = Depends(get_identity), db: AsyncSession = Depends(get_db)):
-    return await run_diagnostics(db, get_router())
+async def system_health(identity: Identity = Depends(get_identity), db: AsyncSession = Depends(get_db),
+                        x_nexus_ai_key: str | None = Header(default=None)):
+    return await run_diagnostics(db, router_for_key(x_nexus_ai_key))
 
 
 @app.get("/system/events")

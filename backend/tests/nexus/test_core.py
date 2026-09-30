@@ -259,3 +259,19 @@ async def test_rate_limit_survives_redis_outage(monkeypatch):
     monkeypatch.setattr(redis_client, "_redis_rate_limit", boom)
     assert await redis_client.rate_limit("outage-test", 1) is True
     assert await redis_client.rate_limit("outage-test", 1) is False
+
+
+def test_byok_router_prefers_callers_key():
+    from mata.nexus.router import detect_provider, router_for_key
+
+    assert detect_provider("nvapi-" + "x" * 40) == "nvidia"
+    assert detect_provider("gsk_" + "x" * 40) == "groq"
+    assert detect_provider("AIza" + "x" * 35) == "gemini"
+    assert detect_provider("sk-ant-" + "x" * 40) == "anthropic"
+    assert detect_provider("hello") is None
+    assert detect_provider("nvapi-has spaces " + "x" * 20) is None
+    r = router_for_key("nvapi-" + "y" * 40)
+    assert r.primary("reasoning").name == "nvidia" and r.primary("fast").name == "nvidia"
+    assert r.primary("vision").name == "nvidia"
+    assert router_for_key("nvapi-" + "y" * 40) is r          # cached
+    assert router_for_key(None).using_mock                  # no key → shared (dev mock in tests)

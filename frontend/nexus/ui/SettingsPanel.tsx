@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { nexus } from "@/nexus/core/api";
+import { aiKeyProvider, getAiKey, nexus, setAiKey } from "@/nexus/core/api";
 import type { VoiceEngine } from "@/nexus/voice/VoiceEngine";
 import { voiceSupport } from "@/nexus/voice/VoiceEngine";
 import { Badge, Btn, ErrorLine, Field, Panel } from "@/nexus/ui/kit";
@@ -26,11 +26,14 @@ export default function SettingsPanel({ onClose, settings, onChange, voice }: {
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [mics, setMics] = useState<MediaDeviceInfo[]>([]);
   const [saved, setSaved] = useState(false);
+  const [aiKey, setAiKeyInput] = useState("");
+  const [storedKey, setStoredKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const sup = voiceSupport();
 
   useEffect(() => {
     nexus.profile().then(setProfile).catch((e) => setError(e.message));
+    setStoredKey(getAiKey());
     const loadVoices = () => setVoices(voice?.voices() ?? []);
     loadVoices();
     if ("speechSynthesis" in window) window.speechSynthesis.onvoiceschanged = loadVoices;
@@ -67,6 +70,23 @@ export default function SettingsPanel({ onClose, settings, onChange, voice }: {
           {saved && <Badge tone="ok">saved</Badge>}
         </div>
         <p className="text-[11px] text-slate-500">Identity uses your MATA account login. No face recognition or biometric identification is performed.</p>
+      </div>
+
+      <div className="nx-card space-y-3">
+        <div className="flex items-center gap-2">
+          <h3 className="nx-mono text-[10px] tracking-[0.2em] uppercase text-slate-400">Clave de IA</h3>
+          {storedKey && aiKeyProvider(storedKey)
+            ? <Badge tone="ok">{aiKeyProvider(storedKey)} · activa</Badge>
+            : <Badge tone="mute">usando la del servidor</Badge>}
+        </div>
+        <p className="text-[11px] text-slate-400">Pega tu clave de NVIDIA (nvapi-…), Groq (gsk_…), Gemini (AIza…), OpenAI o Anthropic. Se guarda solo en este dispositivo y se usa para tus conversaciones.</p>
+        <div className="flex gap-2">
+          <input className="nx-input" type="password" autoComplete="off" placeholder={storedKey ? "•••••••• guardada" : "nvapi-…"}
+            value={aiKey} onChange={(e) => setAiKeyInput(e.target.value)} aria-label="Clave de IA" />
+          <Btn variant="primary" disabled={!aiKeyProvider(aiKey.trim())} onClick={() => { setAiKey(aiKey.trim()); setStoredKey(aiKey.trim()); setAiKeyInput(""); }}>Guardar</Btn>
+        </div>
+        {aiKey && !aiKeyProvider(aiKey.trim()) && <p className="text-[11px] text-amber-300">Esa clave no tiene un formato reconocido.</p>}
+        {storedKey && <Btn small variant="danger" onClick={() => { setAiKey(null); setStoredKey(null); }}>Quitar clave de este dispositivo</Btn>}
       </div>
 
       <div className="nx-card space-y-3">
