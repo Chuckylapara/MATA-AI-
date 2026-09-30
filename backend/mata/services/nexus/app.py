@@ -105,7 +105,8 @@ def _sse(event: str, data: dict) -> str:
 async def status_(identity: Identity = Depends(get_identity), x_nexus_ai_key: str | None = Header(default=None)):
     router = router_for_key(x_nexus_ai_key)
     return {
-        "name": "NEXUS", "version": "0.1.0", "models": router.describe(), "dev_mock_active": router.using_mock,
+        "name": "NEXUS", "version": "0.1.1", "byok": True, "own_key_active": bool(detect_provider(x_nexus_ai_key)),
+        "models": router.describe(), "dev_mock_active": router.using_mock,
         "tools": len(registry.all()), "tools_available": len(registry.available()),
         "agents": {a.name: a.status for a in agents.all()},
         "integrations_configured": [i["id"] for i in list_integrations() if i["configured"]],

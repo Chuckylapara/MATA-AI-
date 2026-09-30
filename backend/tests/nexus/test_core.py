@@ -144,9 +144,13 @@ def test_build_providers_without_keys_is_mock_only():
 
 
 async def test_router_fallback_and_errors():
+    # A real provider's failure is reported — the dev mock must not answer in its place.
     r = ModelRouter({"anthropic": _Failing(), "mock": DevMockProvider()})
     r.providers["anthropic"].name = "anthropic"
-    res = await r.chat([{"role": "user", "content": "hi"}])
+    with pytest.raises(NoProviderAvailable, match="down"):
+        await r.chat([{"role": "user", "content": "hi"}])
+    # With no real provider at all, the (labelled) mock is the stand-in.
+    res = await ModelRouter({"mock": DevMockProvider()}).chat([{"role": "user", "content": "hi"}])
     assert res.provider == "mock" and res.text.startswith("[DEV MOCK")
     r2 = ModelRouter({"anthropic": _Failing()})
     with pytest.raises(NoProviderAvailable):
@@ -275,3 +279,39 @@ def test_byok_router_prefers_callers_key():
     assert r.primary("vision").name == "nvidia"
     assert router_for_key("nvapi-" + "y" * 40) is r          # cached
     assert router_for_key(None).using_mock                  # no key → shared (dev mock in tests)
+
+
+async def test_openai_compatible_falls_back_to_next_model(monkeypatch):
+    """A retired model id (404) must not break chat: the next catalogue model is tried."""
+    import httpx
+
+    from mata.nexus.providers.openai_compat import OpenAICompatibleProvider
+
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        import json as _json
+
+        model = _json.loads(request.content)["model"]
+        calls.append(model)
+        if model == "old/model":
+            return httpx.Response(404, json={"detail": "Function not found for account"})
+        return httpx.Response(200, json={"choices": [{"message": {"content": "hola"}}]})
+
+    real_client = httpx.AsyncClient
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: real_client(transport=httpx.MockTransport(handler)))
+    p = OpenAICompatibleProvider(name="nvidia", base_url="https://x.test/v1", api_key="k", chat_model="old/model",
+                                 alt_models=["new/model"])
+    res = await p.chat([{"role": "user", "content": "hi"}])
+    assert res.text == "hola" and res.model == "new/model" and calls == ["old/model", "new/model"]
+    calls.clear()
+    await p.chat([{"role": "user", "content": "hi"}])
+    assert calls == ["new/model"]  # remembers the working model
+
+
+def test_friendly_provider_errors():
+    from mata.nexus.orchestrator import friendly_provider_error
+
+    assert "no es válida" in friendly_provider_error(Exception("nvidia: HTTP 401: Unauthorized"))
+    assert "límite" in friendly_provider_error(Exception("nvidia: HTTP 429: too many"))
+    assert "conectar" in friendly_provider_error(Exception("nvidia: network error: timeout"))

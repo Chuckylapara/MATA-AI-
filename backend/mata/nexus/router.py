@@ -43,7 +43,11 @@ class ModelRouter:
         if (forced := self._override(role)) and forced in self.providers:
             order = [forced, *(n for n in order if n != forced)]
         cap = _CAP[role]
-        return [self.providers[n] for n in order if n in self.providers and cap in self.providers[n].capabilities]
+        chain = [self.providers[n] for n in order if n in self.providers and cap in self.providers[n].capabilities]
+        # The dev mock is only a stand-in when nothing real is configured; it must never mask a real
+        # provider's failure (that looked like NEXUS "repeating" the user instead of reporting the error).
+        real = [p for p in chain if p.name != "mock"]
+        return real or chain
 
     def primary(self, role: str) -> ModelProvider | None:
         c = self.chain(role)
