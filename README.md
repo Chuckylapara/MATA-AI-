@@ -13,6 +13,20 @@ nine products behind one API-first gateway:
 8. **Auth** – JWT (access + refresh), RBAC
 9. **Billing** – Stripe subscriptions, freemium + premium tiers, credit engine
 
+## NEXUS — personal AI operating environment
+
+NEXUS is the orchestrating intelligence layered on top of the platform: a real-time talking,
+seeing and remembering assistant with a futuristic particle avatar, long-term memory, web
+research, task automation, a permission/confirmation engine and a full audit trail.
+
+```bash
+./scripts/nexus.sh install && ./scripts/nexus.sh configure && ./scripts/nexus.sh start
+# open http://localhost:3000/nexus
+```
+
+Docs: [`docs/nexus/`](docs/nexus/README.md) · architecture: [`docs/MASTER_ARCHITECTURE.md`](docs/MASTER_ARCHITECTURE.md)
+· honest status: [`docs/FEATURE_MATRIX.md`](docs/FEATURE_MATRIX.md), [`docs/ROADMAP.md`](docs/ROADMAP.md).
+
 ## Architecture
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full design.
