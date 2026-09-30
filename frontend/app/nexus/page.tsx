@@ -35,9 +35,13 @@ const DEFAULT_SETTINGS: ClientSettings = { quality: "high", speak: true, lang: "
 const RESTING: AvatarState[] = ["SUCCESS", "WARNING", "ERROR"];
 const uid = () => Math.random().toString(36).slice(2);
 
+const isPhone = () => typeof window !== "undefined" && window.matchMedia("(max-width: 639px), (pointer: coarse) and (max-width: 1024px)").matches;
+
 function loadSettings(): ClientSettings {
-  try { return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem("nexus_settings") || "{}") }; }
-  catch { return DEFAULT_SETTINGS; }
+  // Phones default to medium quality (smooth frame rate with the camera tracking on).
+  const base = isPhone() ? { ...DEFAULT_SETTINGS, quality: "medium" as const } : DEFAULT_SETTINGS;
+  try { return { ...base, ...JSON.parse(localStorage.getItem("nexus_settings") || "{}") }; }
+  catch { return base; }
 }
 
 export default function NexusPage() {
@@ -263,6 +267,7 @@ export default function NexusPage() {
   // ----------------------------------------------------------------- mic / camera
   const toggleMic = async () => {
     const v = voice.current!;
+    v.unlock();   // must run inside the tap so replies can be heard on phones
     if (v.micOn) { v.stopListening(); setState("IDLE"); return; }
     if (await v.startListening()) setState("LISTENING");
   };
@@ -278,6 +283,7 @@ export default function NexusPage() {
           if (s.error) pushError(s.error);
         },
       );
+      if (isPhone()) vision.current.opts = { ...vision.current.opts, hands: false };  // keep phones smooth
       bus.on("CAMERA_ENABLED", () => nexus.clientEvent("CAMERA_ENABLED"));
       bus.on("CAMERA_DISABLED", () => nexus.clientEvent("CAMERA_DISABLED"));
     }
@@ -287,7 +293,11 @@ export default function NexusPage() {
   const toggleCamera = async () => {
     const ve = await ensureVision();
     if (ve.status.camera) ve.stop();
-    else { setPanel("vision"); await ve.startTracking(); }
+    else {
+      // On a phone keep the avatar in view (small camera preview in the corner); on desktop open the panel.
+      if (isPhone()) setPanel(null); else setPanel("vision");
+      await ve.startTracking();
+    }
   };
 
   // ----------------------------------------------------------------- confirmations
@@ -370,7 +380,7 @@ export default function NexusPage() {
       <div className={`absolute inset-x-0 z-10 flex flex-col items-center px-4 pointer-events-none ${tv ? "bottom-16" : "bottom-[calc(env(safe-area-inset-bottom)+190px)] sm:bottom-32"}`}>
         {!caption && !interim && !busy && (
           <p className="nx-mono text-[11px] tracking-[0.3em] uppercase text-cyan-200/70">
-            {name ? `Hola ${name} · ` : ""}{state === "LISTENING" ? "Listening…" : "How can I help?"}
+            {name ? `Hola ${name} · ` : ""}{micOn ? "Te escucho · habla cuando quieras" : "¿En qué te ayudo? · toca el micrófono para hablar"}
           </p>
         )}
         {interim && <p className="text-base sm:text-lg text-cyan-100/80 italic text-center max-w-2xl">“{interim}”</p>}
@@ -384,7 +394,7 @@ export default function NexusPage() {
 
       {/* ---------------- input bar */}
       {!tv && (
-        <form onSubmit={(e) => { e.preventDefault(); send(input); setInput(""); }}
+        <form onSubmit={(e) => { e.preventDefault(); voice.current?.unlock(); send(input); setInput(""); }}
           className="absolute z-20 inset-x-0 bottom-0 px-3 sm:px-6 pb-[calc(env(safe-area-inset-bottom)+14px)] pt-3">
           <div className="nx-inputbar mx-auto max-w-3xl flex items-center gap-2 p-2">
             <button type="button" onClick={toggleMic} aria-pressed={micOn}
@@ -397,7 +407,7 @@ export default function NexusPage() {
               <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M3 8a2 2 0 0 1 2-2h2l2-2h6l2 2h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><circle cx="12" cy="12.5" r="3.5" /></svg>
             </button>
             <input value={input} onChange={(e) => setInput(e.target.value)} aria-label="Message NEXUS"
-              placeholder={authed === false ? "Sign in to talk with NEXUS" : "Talk to NEXUS…"}
+              placeholder={authed === false ? "Inicia sesión para hablar con NEXUS" : "Escribe o toca el micrófono…"}
               className="flex-1 min-w-0 bg-transparent outline-none text-sm placeholder:text-slate-500 px-2" />
             {(speaking || busy) && (
               <button type="button" onClick={() => { voice.current?.interrupt("user"); stream.current?.abort(); setBusy(false); setState("IDLE"); }}
@@ -464,6 +474,11 @@ export default function NexusPage() {
         </div>
       )}
 
+      {/* ---------------- live camera preview (when the Vision panel is closed) */}
+      {!tv && vstatus.camera && panel !== "vision" && (
+        <CameraPip engine={vision.current} tracking={vstatus.tracking} loading={vstatus.loading} onOpen={() => openPanel("vision")} />
+      )}
+
       {/* ---------------- toasts, auth gate, confirmation */}
       {toast && <div role="status" className="absolute z-40 top-16 left-1/2 -translate-x-1/2 nx-toast">{toast}</div>}
       {authed === false && !tv && (
@@ -499,5 +514,26 @@ function ToolsPanel({ onClose }: { onClose: () => void }) {
         ))}
       </ul>
     </Panel>
+  );
+}
+
+function CameraPip({ engine, tracking, loading, onOpen }: { engine: VisionEngine | null; tracking: boolean; loading: boolean; onOpen: () => void }) {
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!engine || !box.current) return;
+    const v = engine.video;
+    v.className = "w-full h-full object-cover";
+    v.style.transform = engine.facingMode === "user" ? "scaleX(-1)" : "";
+    box.current.appendChild(v);
+    return () => { v.remove(); };
+  }, [engine]);
+  return (
+    <button onClick={onOpen} aria-label="Open vision panel"
+      className="absolute z-20 left-3 sm:left-auto sm:right-6 top-16 sm:top-auto sm:bottom-28 w-24 h-32 sm:w-40 sm:h-28 rounded-xl overflow-hidden border border-rose-300/50 shadow-lg shadow-black/50 bg-black/60">
+      <div ref={box} className="absolute inset-0" />
+      <span className="absolute bottom-1 left-1 right-1 nx-mono text-[9px] tracking-widest text-rose-100 bg-black/50 rounded px-1 py-0.5">
+        {loading ? "CARGANDO…" : tracking ? "● SIGUIENDO" : "● CÁMARA"}
+      </span>
+    </button>
   );
 }

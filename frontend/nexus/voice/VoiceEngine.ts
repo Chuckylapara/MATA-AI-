@@ -55,8 +55,31 @@ export class VoiceEngine {
   private vadHot = 0;
   private noiseFloor = 0.02;
   private restartTimer: ReturnType<typeof setTimeout> | null = null;
+  private unlocked = false;
+  private lastCancel = 0;
+  private keepAlive: ReturnType<typeof setInterval> | null = null;
+  private warnedSilent = false;
+  /** Phones: louder speaker → higher barge-in threshold while NEXUS talks. */
+  private coarse = typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
 
   constructor(private cb: VoiceCallbacks = {}) {}
+
+  /**
+   * Phones only play speech that starts inside a tap. Call this synchronously from every
+   * tap handler (mic, send, speaker); later replies — which arrive after awaits — can then speak.
+   */
+  unlock() {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    try {
+      window.speechSynthesis.resume();
+      if (!this.unlocked) {
+        const u = new SpeechSynthesisUtterance(" ");
+        u.volume = 0;
+        window.speechSynthesis.speak(u);
+        this.unlocked = true;
+      }
+    } catch { /* noop */ }
+  }
 
   // ------------------------------------------------------------------ microphone + STT
   async startListening(): Promise<boolean> {
@@ -179,7 +202,7 @@ export class VoiceEngine {
     const level = Math.min(1, Math.max(0, (rms - this.noiseFloor) * 12));
     this.cb.onMicLevel?.(level);
     // Energy VAD for barge-in: louder threshold while NEXUS speaks (echo margin), sustained ~200 ms.
-    const threshold = this.speaking ? 0.45 : 0.18;
+    const threshold = this.speaking ? (this.coarse ? 0.62 : 0.45) : 0.18;
     this.vadHot = level > threshold ? this.vadHot + 1 : Math.max(0, this.vadHot - 2);
     if (this.speaking && this.vadHot > 12) { this.vadHot = 0; this.interrupt("vad"); }
   };
@@ -219,6 +242,8 @@ export class VoiceEngine {
 
   private next() {
     if (!("speechSynthesis" in window)) return;
+    // Chrome can silently drop a speak() issued right after cancel().
+    if (performance.now() - this.lastCancel < 160) { setTimeout(() => this.next(), 160); return; }
     const sentence = this.queue.shift();
     if (!sentence) { this.setSpeaking(false); return; }
     const u = new SpeechSynthesisUtterance(sentence);
@@ -228,7 +253,14 @@ export class VoiceEngine {
     const v = this.pickVoice();
     if (v) u.voice = v;
     this.currentUtter = sentence;
-    u.onstart = () => this.setSpeaking(true);
+    let started = false;
+    u.onstart = () => { started = true; this.setSpeaking(true); };
+    setTimeout(() => {
+      if (!started && this.currentUtter === sentence && !window.speechSynthesis.speaking && !this.warnedSilent) {
+        this.warnedSilent = true;
+        this.cb.onError?.("El navegador no reprodujo la voz. Sube el volumen, quita el modo silencio y toca el micrófono o enviar para activar el sonido.");
+      }
+    }, 3500);
     u.onboundary = () => { this.speechLevel = 1; };   // word onset → mouth opens
     u.onend = () => { this.currentUtter = ""; setTimeout(() => this.next(), 90); };  // natural pause
     u.onerror = () => { this.currentUtter = ""; this.next(); };
@@ -252,7 +284,10 @@ export class VoiceEngine {
     this.speaking = on;
     this.cb.onSpeakingChange?.(on);
     cancelAnimationFrame(this.speechRaf);
+    if (this.keepAlive) { clearInterval(this.keepAlive); this.keepAlive = null; }
     if (on) {
+      // Chrome pauses long speech after ~15 s unless resumed.
+      this.keepAlive = setInterval(() => { try { if (window.speechSynthesis.speaking) window.speechSynthesis.resume(); } catch { /* noop */ } }, 4000);
       const tick = () => {
         // Synthetic envelope: boundary pulses decay, plus syllable-rate modulation.
         this.speechLevel *= 0.9;
@@ -275,6 +310,7 @@ export class VoiceEngine {
     this.pendingText = "";
     this.currentUtter = "";
     if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    this.lastCancel = performance.now();
     this.setSpeaking(false);
     bus.emit("USER_INTERRUPTED", { reason });
   }
