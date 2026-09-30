@@ -65,6 +65,7 @@ async def init_db() -> None:
     """Create tables on startup (dev). Use Alembic migrations in production."""
     # Import models so they register on Base.metadata.
     from mata.common import models  # noqa: F401
+    from mata.nexus import models as nexus_models  # noqa: F401
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

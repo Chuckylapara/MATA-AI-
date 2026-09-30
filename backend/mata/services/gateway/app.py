@@ -37,6 +37,7 @@ SERVICE_MAP = {
     "clips": (settings.clips_service_url, True),
     "tools": (settings.tools_service_url, True),
     "health": (settings.health_service_url, True),
+    "nexus": (settings.nexus_service_url, True),
 }
 
 # Auth routes that don't need a token.

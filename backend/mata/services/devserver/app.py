@@ -32,6 +32,8 @@ from mata.services.health.app import app as health_app
 from mata.services.image.app import app as image_app
 from mata.services.music.app import app as music_app
 from mata.services.music.providers import run_music
+from mata.services.nexus.app import _start_scheduler as _start_nexus_scheduler
+from mata.services.nexus.app import app as nexus_app
 from mata.services.studio.app import app as studio_app
 from mata.services.tools.app import app as tools_app
 from mata.services.video.app import app as video_app
@@ -51,6 +53,7 @@ _MOUNTS = {
     "/clips": clips_app,
     "/tools": tools_app,
     "/health": health_app,
+    "/nexus": nexus_app,
 }
 
 _worker_tasks: list[asyncio.Task] = []
@@ -69,6 +72,12 @@ async def lifespan(app: FastAPI):
         await _seed_admin()
     except Exception as exc:  # noqa: BLE001
         print(f"[devserver] startup warning: {exc}", flush=True)
+
+    # Mounted sub-apps don't run their own lifespan, so start the NEXUS scheduler here.
+    try:
+        await _start_nexus_scheduler()
+    except Exception as exc:  # noqa: BLE001
+        print(f"[devserver] nexus scheduler warning: {exc}", flush=True)
 
     if _ENABLE_WORKERS:
         try:

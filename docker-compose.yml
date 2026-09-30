@@ -92,6 +92,10 @@ services:
     <<: *backend
     environment: { SERVICE: health, PORT: 8013 }
 
+  nexus:
+    <<: *backend
+    environment: { SERVICE: nexus, PORT: 8014 }
+
   # --- Async generation workers ---
   video-worker:
     <<: *backend
