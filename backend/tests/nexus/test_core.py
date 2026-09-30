@@ -222,3 +222,40 @@ async def test_executor_drops_undeclared_args(user_id):
         ctx = ToolContext(db=db, user_id=user_id, router=router, memory=MemoryEngine(db, user_id, Embedder(router)))
         res = await executor.run(ctx, "calculator", {"expression": "2*(3+4)", "user_id": "someone-else"})
     assert res.ok and res.data["result"] == 14
+
+
+async def test_db_falls_back_to_sqlite_when_database_unreachable(tmp_path, monkeypatch):
+    """An expired/unreachable Postgres must not turn the whole API into 500s."""
+    from sqlalchemy.ext.asyncio import create_async_engine
+    from sqlalchemy import select
+
+    from mata.common import db
+    from mata.common.models import User
+
+    saved = (db.engine, db._is_sqlite, dict(db.DB_STATE))
+    dead = create_async_engine("postgresql+asyncpg://u:p@127.0.0.1:1/nope")
+    monkeypatch.setattr(db, "engine", dead)
+    monkeypatch.setattr(db, "_is_sqlite", False)
+    monkeypatch.setenv("DB_FALLBACK_PATH", str(tmp_path / "fb.db"))
+    try:
+        await db.init_db()
+        assert db.DB_STATE["fallback"] is True and db.DB_STATE["error"]
+        async with db.SessionLocal() as s:
+            assert (await s.execute(select(User))).all() == []
+    finally:
+        db.engine, db._is_sqlite = saved[0], saved[1]
+        db.DB_STATE.clear(); db.DB_STATE.update(saved[2])
+        db.SessionLocal.configure(bind=saved[0])
+
+
+async def test_rate_limit_survives_redis_outage(monkeypatch):
+    from mata.common import redis_client
+    from mata.common.config import settings
+
+    async def boom(*a, **k):
+        raise ConnectionError("redis down")
+
+    monkeypatch.setattr(settings, "dev_inmemory", False)
+    monkeypatch.setattr(redis_client, "_redis_rate_limit", boom)
+    assert await redis_client.rate_limit("outage-test", 1) is True
+    assert await redis_client.rate_limit("outage-test", 1) is False

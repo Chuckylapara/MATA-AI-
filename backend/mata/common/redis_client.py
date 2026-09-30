@@ -30,16 +30,26 @@ def get_redis():
 
 
 async def rate_limit(key: str, limit_per_min: int) -> bool:
-    """Fixed-window limiter. Returns True if allowed."""
-    if settings.dev_inmemory:
-        now = time.time()
-        count, window_start = _mem_counters.get(key, (0, now))
-        if now - window_start >= 60:
-            count, window_start = 0, now
-        count += 1
-        _mem_counters[key] = (count, window_start)
-        return count <= limit_per_min
+    """Fixed-window limiter. Returns True if allowed.
 
+    Falls back to the in-process counter if Redis is unreachable, so a Redis outage degrades
+    rate limiting instead of turning every request into a 500.
+    """
+    if not settings.dev_inmemory:
+        try:
+            return await _redis_rate_limit(key, limit_per_min)
+        except Exception:  # noqa: BLE001 — connection refused, DNS, auth, timeout…
+            pass
+    now = time.time()
+    count, window_start = _mem_counters.get(key, (0, now))
+    if now - window_start >= 60:
+        count, window_start = 0, now
+    count += 1
+    _mem_counters[key] = (count, window_start)
+    return count <= limit_per_min
+
+
+async def _redis_rate_limit(key: str, limit_per_min: int) -> bool:
     r = get_redis()
     window_key = f"rl:{key}"
     count = await r.incr(window_key)

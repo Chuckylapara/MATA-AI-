@@ -108,9 +108,10 @@ async def root():
 
 @app.get("/healthz")
 async def healthz():
-    from mata.common.db import engine
+    from mata.common import db
 
-    return {"status": "ok", "mode": "devserver", "db": engine.url.get_backend_name(), "mounts": list(_MOUNTS)}
+    return {"status": "ok", "mode": "devserver", "db": db.engine.url.get_backend_name(),
+            "db_fallback": db.DB_STATE["fallback"], "db_error": db.DB_STATE["error"], "mounts": list(_MOUNTS)}
 
 
 for prefix, sub in _MOUNTS.items():
