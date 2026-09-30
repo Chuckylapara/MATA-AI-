@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     clips_service_url: str = "http://clips:8011"
     tools_service_url: str = "http://tools:8012"
     health_service_url: str = "http://health:8013"
+    nexus_service_url: str = "http://nexus:8014"
 
     # --- Provider keys (optional — mock providers used when absent) ---
     anthropic_api_key: str | None = None
@@ -56,6 +57,25 @@ class Settings(BaseSettings):
     elevenlabs_voice_id: str | None = None
     kie_api_key: str | None = None  # kie.ai — backup for images/video/music
     stripe_secret_key: str | None = None
+    # --- NEXUS (personal AI OS layer) — all optional ---
+    ollama_base_url: str | None = None      # e.g. http://localhost:11434/v1 (local models)
+    ollama_model: str = "llama3.1:8b"
+    ollama_vision_model: str = "qwen2.5vl:7b"
+    ollama_embed_model: str = "nomic-embed-text"
+    groq_chat_model: str = "llama-3.3-70b-versatile"
+    openai_chat_model: str = "gpt-4o-mini"
+    openai_embed_model: str = "text-embedding-3-small"
+    gemini_embed_model: str = "text-embedding-004"
+    nexus_fast_provider: str | None = None       # force a provider per role
+    nexus_reasoning_provider: str | None = None
+    nexus_vision_provider: str | None = None
+    nexus_embed_provider: str | None = None
+    nexus_allow_dev_mock: bool = True             # dev-only placeholder model when no key is set
+    nexus_max_steps: int = 6
+    searxng_url: str | None = None               # self-hosted SearXNG base URL
+    tavily_api_key: str | None = None
+    brave_api_key: str | None = None
+    nexus_search_providers: str = "searxng,tavily,brave,wikipedia"
     stripe_webhook_secret: str | None = None
 
     # --- PayPal (subscriptions + one-time credit packs) ---
@@ -89,9 +109,14 @@ class Settings(BaseSettings):
     # --- CORS ---
     cors_origins: str = "http://localhost:3000"
 
+    # Always-allowed extra origins (the NEXUS build published on GitHub Pages), added to CORS_ORIGINS
+    # so hosted backends accept it without a dashboard change.
+    cors_extra_origins: str = "https://chuckylapara.github.io"
+
     @property
     def cors_origin_list(self) -> list[str]:
-        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+        origins = [o.strip() for o in f"{self.cors_origins},{self.cors_extra_origins}".split(",") if o.strip()]
+        return list(dict.fromkeys(origins))
 
     # --- Accounts exempt from the credit system (owner accounts, no spending cap) ---
     unlimited_emails: str = "drew@mata-ai.app,admin@mata-ai.app"

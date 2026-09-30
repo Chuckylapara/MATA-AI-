@@ -1,9 +1,16 @@
 "use client";
+import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 
 // Animated, mouse-reactive particle field with glow + connecting lines.
 // Tuned for a premium, futuristic "AI platform" feel.
 export default function Background() {
+  const path = usePathname();
+  if (path?.startsWith("/nexus")) return null;
+  return <BackgroundInner />;
+}
+
+function BackgroundInner() {
   const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {

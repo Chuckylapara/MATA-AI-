@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const links = [
+  { href: "/nexus",     label: "NEXUS" },
   { href: "/dashboard", label: "Dashboard" },
   { href: "/health",    label: "Salud" },
   { href: "/create",    label: "Crear video" },
@@ -19,6 +20,8 @@ const links = [
 export default function NavBar() {
   const path = usePathname();
   const [open, setOpen] = useState(false);
+  // NEXUS runs full-screen with its own chrome.
+  if (path?.startsWith("/nexus")) return null;
 
   return (
     <>
