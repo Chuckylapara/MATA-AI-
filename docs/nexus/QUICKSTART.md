@@ -35,6 +35,14 @@ Restart `start` after editing `.env`. Check **System** in the sidebar: `ai_provi
 Wikipedia works out of the box. For general web search add a self-hosted SearXNG
 (`SEARXNG_URL`) or a Tavily key (1,000 free searches/month).
 
+## Publish from a phone (GitHub Pages, no PC needed)
+1. GitHub → repository **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+2. Merge to `main`. The workflow `.github/workflows/nexus-pages.yml` tests, builds and publishes.
+3. Open `https://<user>.github.io/<repo>/nexus/`, create an account on the NEXUS screen.
+4. If it can't reach the server, tap **Servidor** on the sign-in card and enter your backend URL
+   (or set the repository variable `NEXUS_API_URL`). The backend must also run the new code
+   (Render redeploys from `main`; Hugging Face needs *Factory rebuild*).
+
 ## Docker
 `docker compose up --build` now includes a `nexus` service on port 8014 behind the gateway.
 

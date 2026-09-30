@@ -1,0 +1,54 @@
+# Publishes the frontend (including NEXUS at /nexus/) to GitHub Pages on every push to main,
+# so it can be opened from any phone without building on a PC.
+# One-time setup: repo Settings → Pages → Build and deployment → Source: "GitHub Actions".
+# Optional: Settings → Secrets and variables → Actions → Variables → NEXUS_API_URL = your backend URL.
+name: Publish NEXUS (GitHub Pages)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run test:nexus
+      - name: Build static site
+        run: npx next build
+        env:
+          NEXT_PUBLIC_BASE_PATH: /${{ github.event.repository.name }}
+          NEXT_PUBLIC_API_URL: ${{ vars.NEXUS_API_URL || 'https://mata-ai-backend.onrender.com' }}
+      - run: touch out/.nojekyll
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: frontend/out
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}nexus/
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -9,7 +9,7 @@ export default function PWARegister() {
     if (!("serviceWorker" in navigator)) return;
 
     navigator.serviceWorker
-      .register("/sw.js")
+      .register(`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/sw.js`)
       .then((reg) => {
         // Revisa si hay una versión nueva cada vez que se abre/enfoca la app.
         reg.update().catch(() => {});

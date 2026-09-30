@@ -1,7 +1,5 @@
 "use client";
-import { getToken, refreshTokens } from "@/lib/api";
-
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+import { apiBase, getToken, refreshTokens } from "@/lib/api";
 
 export class NexusApiError extends Error {
   constructor(public status: number, message: string) { super(message); }
@@ -12,7 +10,7 @@ async function send(path: string, init: RequestInit = {}): Promise<Response> {
     const headers: Record<string, string> = { "Content-Type": "application/json", ...(init.headers as any) };
     const t = getToken();
     if (t) headers.Authorization = `Bearer ${t}`;
-    return fetch(`${API}/nexus${path}`, { ...init, headers });
+    return fetch(`${apiBase()}/nexus${path}`, { ...init, headers });
   };
   let res = await go();
   if (res.status === 401 && (await refreshTokens())) res = await go();

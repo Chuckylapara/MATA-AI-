@@ -9,7 +9,7 @@ import type { AvatarState, ChatTurn, PendingAction } from "@/nexus/core/types";
 import { AVATAR_STATES } from "@/nexus/core/types";
 import { VoiceEngine, voiceSupport } from "@/nexus/voice/VoiceEngine";
 import type { VisionEngine, VisionStatus } from "@/nexus/vision/VisionEngine";
-import { getToken } from "@/lib/api";
+import { api, apiBase, getToken, setApiBase } from "@/lib/api";
 import AutomationCenter from "@/nexus/ui/AutomationCenter";
 import CapabilityPanel from "@/nexus/ui/CapabilityPanel";
 import ConfirmDialog from "@/nexus/ui/ConfirmDialog";
@@ -349,7 +349,7 @@ export default function NexusPage() {
       {/* ---------------- top bar */}
       <header className="absolute top-0 inset-x-0 flex items-center gap-3 px-4 sm:px-6 pt-4 z-20">
         {!tv && (
-          <a href="/" className="flex items-center gap-2 group" aria-label="MATA AI home">
+          <a href={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/`} className="flex items-center gap-2 group" aria-label="MATA AI home">
             <span className="nx-logo" aria-hidden="true" />
             <span className="nx-mono text-[13px] tracking-[0.35em] text-cyan-100">NEXUS</span>
             <span className="hidden sm:inline nx-mono text-[10px] tracking-[0.2em] text-slate-500">· MATA AI</span>
@@ -482,12 +482,8 @@ export default function NexusPage() {
       {/* ---------------- toasts, auth gate, confirmation */}
       {toast && <div role="status" className="absolute z-40 top-16 left-1/2 -translate-x-1/2 nx-toast">{toast}</div>}
       {authed === false && !tv && (
-        <div className="absolute z-40 inset-x-0 top-24 flex justify-center px-4">
-          <div className="nx-panel px-6 py-5 max-w-sm text-center">
-            <p className="nx-mono text-[10px] tracking-[0.3em] text-cyan-300 mb-2">IDENTITY REQUIRED</p>
-            <p className="text-sm text-slate-300 mb-4">Sign in to your MATA account so NEXUS can keep your memory, permissions and tasks private to you.</p>
-            <a href="/login" className="nx-btn nx-btn-primary text-xs px-4 py-2 inline-block">Sign in</a>
-          </div>
+        <div className="absolute z-40 inset-x-0 top-20 flex justify-center px-4">
+          <SignIn onDone={() => { setAuthed(true); location.reload(); }} />
         </div>
       )}
       {pending[0] && <ConfirmDialog action={pending[0]} busy={confirmBusy} onConfirm={() => resolvePending(pending[0], true)} onReject={() => resolvePending(pending[0], false)} />}
@@ -535,5 +531,60 @@ function CameraPip({ engine, tracking, loading, onOpen }: { engine: VisionEngine
         {loading ? "CARGANDO…" : tracking ? "● SIGUIENDO" : "● CÁMARA"}
       </span>
     </button>
+  );
+}
+
+function SignIn({ onDone }: { onDone: () => void }) {
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [server, setServer] = useState("");
+  const [showServer, setShowServer] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => { setServer(apiBase()); }, []);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null); setLoading(true);
+    try {
+      if (showServer) setApiBase(server || null);
+      if (mode === "login") await api.login({ email, password });
+      else await api.register({ email, password });
+      onDone();
+    } catch (err: any) {
+      const msg = String(err?.message || err);
+      setError(/fetch|network|load failed/i.test(msg)
+        ? "No se pudo conectar con el servidor. Revisa la dirección del servidor (abajo) o espera un minuto si estaba dormido."
+        : msg);
+      setShowServer(true);
+    } finally { setLoading(false); }
+  };
+
+  return (
+    <form onSubmit={submit} className="nx-panel px-5 py-5 w-full max-w-sm space-y-3">
+      <p className="nx-mono text-[10px] tracking-[0.3em] text-cyan-300">{mode === "login" ? "INICIA SESIÓN" : "CREA TU CUENTA"}</p>
+      <p className="text-xs text-slate-400">Tu cuenta de MATA mantiene privada tu memoria, tus permisos y tus tareas.</p>
+      <input id="nx-email" className="nx-input" type="email" autoComplete="email" placeholder="correo@ejemplo.com"
+        value={email} onChange={(e) => setEmail(e.target.value)} required aria-label="Correo" />
+      <input id="nx-password" className="nx-input" type="password" autoComplete={mode === "login" ? "current-password" : "new-password"}
+        placeholder="Contraseña" minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} required aria-label="Contraseña" />
+      {showServer && (
+        <label className="block">
+          <span className="nx-mono block text-[10px] tracking-[0.2em] uppercase text-slate-400 mb-1">Servidor</span>
+          <input id="nx-server" className="nx-input" type="url" placeholder="https://tu-servidor" value={server} onChange={(e) => setServer(e.target.value)} />
+        </label>
+      )}
+      {error && <p role="alert" className="text-xs text-rose-300">{error}</p>}
+      <button type="submit" disabled={loading} className="nx-btn nx-btn-primary text-sm px-4 py-2 w-full">
+        {loading ? "Conectando…" : mode === "login" ? "Entrar" : "Crear cuenta"}
+      </button>
+      <div className="flex justify-between text-[11px] text-slate-400">
+        <button type="button" onClick={() => setMode(mode === "login" ? "register" : "login")} className="hover:text-cyan-200">
+          {mode === "login" ? "¿No tienes cuenta? Crea una" : "Ya tengo cuenta"}
+        </button>
+        <button type="button" onClick={() => setShowServer(!showServer)} className="hover:text-cyan-200">Servidor</button>
+      </div>
+    </form>
   );
 }

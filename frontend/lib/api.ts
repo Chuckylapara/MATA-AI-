@@ -1,6 +1,25 @@
 "use client";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const DEFAULT_API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
+// The backend address can be changed from the NEXUS screen (stored on this device), so a
+// published site can be pointed at the right server without rebuilding.
+export function apiBase(): string {
+  if (typeof window !== "undefined") {
+    try {
+      const o = localStorage.getItem("mata_api_url");
+      if (o && /^https?:\/\//.test(o)) return o.replace(/\/+$/, "");
+    } catch { /* storage blocked */ }
+  }
+  return DEFAULT_API;
+}
+
+export function setApiBase(url: string | null) {
+  try {
+    if (url) localStorage.setItem("mata_api_url", url.trim().replace(/\/+$/, ""));
+    else localStorage.removeItem("mata_api_url");
+  } catch { /* storage blocked */ }
+}
 
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -21,7 +40,7 @@ export function logout() {
 export async function refreshTokens(): Promise<boolean> {
   const rt = typeof window !== "undefined" ? localStorage.getItem("mata_refresh") : null;
   if (!rt) return false;
-  const res = await fetch(`${API}/auth/refresh`, {
+  const res = await fetch(`${apiBase()}/auth/refresh`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ refresh_token: rt }),
@@ -39,7 +58,7 @@ function doFetch(path: string, opts: RequestInit, auth: boolean) {
   const headers: Record<string, string> = { "Content-Type": "application/json", ...(opts.headers as any) };
   const token = getToken();
   if (auth && token) headers["Authorization"] = `Bearer ${token}`;
-  return fetch(`${API}${path}`, { ...opts, headers });
+  return fetch(`${apiBase()}${path}`, { ...opts, headers });
 }
 
 async function request(path: string, opts: RequestInit = {}, auth = true) {
@@ -62,7 +81,7 @@ async function requestForm(path: string, form: FormData) {
     const headers: Record<string, string> = {};
     const token = getToken();
     if (token) headers["Authorization"] = `Bearer ${token}`;
-    return fetch(`${API}${path}`, { method: "POST", body: form, headers });
+    return fetch(`${apiBase()}${path}`, { method: "POST", body: form, headers });
   };
   let res = await send();
   if (res.status === 401 && (await refreshTokens())) res = await send();
@@ -134,7 +153,7 @@ export const api = {
     request("/tools/summarize", { method: "POST", body: JSON.stringify({ text }) }),
   vision: (body: { image: string; question: string }) =>
     request("/tools/vision", { method: "POST", body: JSON.stringify(body) }),
-  apiBase: API,
+  get apiBase() { return apiBase(); },
   // Mata Health AI
   healthProfileGet: () => request("/health/profile"),
   healthProfileSave: (body: any) => request("/health/profile", { method: "PUT", body: JSON.stringify(body) }),
@@ -183,7 +202,7 @@ export async function streamChat(
     return h;
   };
   const send = () =>
-    fetch(`${API}/chat/completions`, {
+    fetch(`${apiBase()}/chat/completions`, {
       method: "POST",
       headers: buildHeaders(),
       body: JSON.stringify({ messages, conversation_id: conversationId, stream: true }),

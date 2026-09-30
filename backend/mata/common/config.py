@@ -109,9 +109,14 @@ class Settings(BaseSettings):
     # --- CORS ---
     cors_origins: str = "http://localhost:3000"
 
+    # Always-allowed extra origins (the NEXUS build published on GitHub Pages), added to CORS_ORIGINS
+    # so hosted backends accept it without a dashboard change.
+    cors_extra_origins: str = "https://chuckylapara.github.io"
+
     @property
     def cors_origin_list(self) -> list[str]:
-        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+        origins = [o.strip() for o in f"{self.cors_origins},{self.cors_extra_origins}".split(",") if o.strip()]
+        return list(dict.fromkeys(origins))
 
     # --- Accounts exempt from the credit system (owner accounts, no spending cap) ---
     unlimited_emails: str = "drew@mata-ai.app,admin@mata-ai.app"

@@ -114,7 +114,7 @@ export default function SettingsPanel({ onClose, settings, onChange, voice }: {
           </div>
         </Field>
         <div className="flex flex-wrap gap-2">
-          <a className="nx-btn nx-btn-ghost text-xs px-3.5 py-1.5" href="/nexus/?display=tv" target="_blank" rel="noreferrer">Open TV / display mode ↗</a>
+          <a className="nx-btn nx-btn-ghost text-xs px-3.5 py-1.5" href={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/nexus/?display=tv`} target="_blank" rel="noreferrer">Open TV / display mode ↗</a>
         </div>
         <p className="text-[11px] text-slate-500">Display mode shows only the avatar and live captions — ideal for a TV or large monitor while this PC runs the brain.</p>
       </div>
