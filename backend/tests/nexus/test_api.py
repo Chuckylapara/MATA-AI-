@@ -300,3 +300,56 @@ def test_html_extraction_strips_scripts():
     title, text = web.html_to_text("<html><head><title>T</title><script>evil()</script></head>"
                                    "<body><nav>menu</nav><p>Hello</p><p>World</p></body></html>")
     assert title == "T" and "evil" not in text and "menu" not in text and "Hello" in text
+
+
+async def test_guest_session_without_account():
+    from mata.services.auth.app import app as auth_app
+    from mata.services.nexus.app import app as nexus_app
+
+    async with AsyncClient(transport=ASGITransport(app=auth_app), base_url="http://t") as a:
+        r = await a.post("/guest")
+        assert r.status_code == 201
+        tokens = r.json()
+        assert tokens["access_token"] and tokens["refresh_token"]
+        other = (await a.post("/guest")).json()
+        assert other["access_token"] != tokens["access_token"]  # every device gets its own private session
+    h = {"Authorization": f"Bearer {tokens['access_token']}"}
+    async with AsyncClient(transport=ASGITransport(app=nexus_app), base_url="http://t", headers=h) as n:
+        assert (await n.get("/status")).status_code == 200
+        r = await n.post("/converse", json={"text": "Hola, me llamo Ana"})
+        assert r.status_code == 200 and "[DEV MOCK" in r.text
+        assert (await n.get("/profile")).json()["display_name"] == "Ana"
+
+
+async def test_guest_daily_cap(monkeypatch):
+    from mata.common.config import settings
+    from mata.services.auth.app import app as auth_app
+    from mata.services.nexus.app import app as nexus_app
+
+    monkeypatch.setattr(settings, "guest_daily_messages", 2)
+    async with AsyncClient(transport=ASGITransport(app=auth_app), base_url="http://t") as a:
+        tok = (await a.post("/guest")).json()["access_token"]
+    async with AsyncClient(transport=ASGITransport(app=nexus_app), base_url="http://t",
+                           headers={"Authorization": f"Bearer {tok}"}) as n:
+        assert (await n.post("/converse", json={"text": "uno"})).status_code == 200
+        assert (await n.post("/converse", json={"text": "dos"})).status_code == 200
+        r = await n.post("/converse", json={"text": "tres"})
+        assert r.status_code == 429
+
+
+async def test_guest_creation_is_rate_limited(monkeypatch):
+    from mata.common.config import settings
+    from mata.services.auth.app import app as auth_app
+
+    monkeypatch.setattr(settings, "guest_sessions_per_min", 1)
+    async with AsyncClient(transport=ASGITransport(app=auth_app), base_url="http://t",
+                           headers={"x-forwarded-for": "203.0.113.9"}) as a:
+        assert (await a.post("/guest")).status_code == 201
+        assert (await a.post("/guest")).status_code == 429
+
+
+async def test_registered_users_have_no_guest_cap(client, monkeypatch):
+    from mata.common.config import settings
+
+    monkeypatch.setattr(settings, "guest_daily_messages", 0)
+    assert (await client.post("/converse", json={"text": "hola"})).status_code == 200

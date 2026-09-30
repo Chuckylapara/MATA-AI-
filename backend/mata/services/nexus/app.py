@@ -120,8 +120,32 @@ class ConverseBody(BaseModel):
     channel: str = "text"  # text | voice
 
 
+async def _guest_over_limit(identity: Identity) -> bool:
+    """Guests get a daily message budget so anonymous use can't drain the AI provider quota."""
+    from datetime import timedelta
+
+    from sqlalchemy import func
+
+    from mata.common.config import settings
+    from mata.common.models import User
+
+    async with SessionLocal() as db:
+        email = (await db.execute(select(User.email).where(User.id == identity.user_id))).scalar_one_or_none()
+        if not email or not email.endswith("@guest.mata-ai.app"):
+            return False
+        since = datetime.now(timezone.utc) - timedelta(hours=24)
+        n = (await db.execute(
+            select(func.count(Message.id)).join(Conversation, Message.conversation_id == Conversation.id)
+            .where(Conversation.user_id == identity.user_id, Message.role == "user", Message.created_at >= since)
+        )).scalar_one()
+        return n >= settings.guest_daily_messages
+
+
 @app.post("/converse")
 async def converse(body: ConverseBody, identity: Identity = Depends(get_identity)):
+    if await _guest_over_limit(identity):
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS,
+                            "Límite diario de mensajes como invitado alcanzado. Vuelve mañana o crea una cuenta.")
     async def stream() -> AsyncIterator[str]:
         queue: asyncio.Queue = asyncio.Queue()
         done = object()

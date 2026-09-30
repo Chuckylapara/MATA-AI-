@@ -41,7 +41,7 @@ SERVICE_MAP = {
 }
 
 # Auth routes that don't need a token.
-PUBLIC_AUTH_PATHS = {"register", "login", "refresh"}
+PUBLIC_AUTH_PATHS = {"register", "login", "refresh", "guest"}
 
 
 def _verify(authorization: str | None) -> dict:

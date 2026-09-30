@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { api, getToken, logout } from "@/lib/api";
+import { api, getToken, isGuest, logout } from "@/lib/api";
 
 export default function LoginPage() {
   const [mode, setMode] = useState<"login" | "register">("login");
@@ -11,7 +11,8 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (getToken()) api.me().then(setMe).catch(() => {});
+    // Guests (automatic no-account sessions) see the forms, not the "session active" card.
+    if (getToken() && !isGuest()) api.me().then(setMe).catch(() => {});
   }, []);
 
   async function submit(e: React.FormEvent) {
@@ -64,6 +65,10 @@ export default function LoginPage() {
           </h1>
           <p className="text-white/40 text-sm mt-2">
             {mode === "login" ? "Accede a tu plataforma de IA" : "Empieza gratis, sin tarjeta de crédito"}
+          </p>
+          <p className="text-white/50 text-xs mt-3">
+            La cuenta es opcional: puedes usar MATA AI y NEXUS sin registrarte.{" "}
+            <a href={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/nexus/`} className="underline hover:text-white">Entrar sin cuenta →</a>
           </p>
         </div>
 

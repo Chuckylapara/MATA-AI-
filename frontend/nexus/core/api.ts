@@ -1,5 +1,5 @@
 "use client";
-import { apiBase, getToken, refreshTokens } from "@/lib/api";
+import { apiBase, ensureSession, getToken, refreshTokens } from "@/lib/api";
 
 export class NexusApiError extends Error {
   constructor(public status: number, message: string) { super(message); }
@@ -12,8 +12,9 @@ async function send(path: string, init: RequestInit = {}): Promise<Response> {
     if (t) headers.Authorization = `Bearer ${t}`;
     return fetch(`${apiBase()}/nexus${path}`, { ...init, headers });
   };
+  if (!getToken()) await ensureSession();
   let res = await go();
-  if (res.status === 401 && (await refreshTokens())) res = await go();
+  if (res.status === 401 && ((await refreshTokens()) || (await ensureSession()))) res = await go();
   return res;
 }
 

@@ -4,7 +4,10 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 import jwt
-from fastapi import Depends, HTTPException, status
+import secrets
+import uuid
+
+from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,6 +16,7 @@ from mata.common.config import settings
 from mata.common.db import SessionLocal, get_db
 from mata.common.deps import Identity, get_identity
 from mata.common.models import RefreshToken, Role, Tier, User
+from mata.common.redis_client import rate_limit
 from mata.common.schemas import LoginIn, RefreshIn, RegisterIn, TokenPair, UserOut
 from mata.common.security import (
     create_access_token,
@@ -59,6 +63,34 @@ async def register(body: RegisterIn, db: AsyncSession = Depends(get_db)) -> Toke
         email=body.email,
         hashed_password=hash_password(body.password),
         full_name=body.full_name,
+    )
+    db.add(user)
+    await db.flush()
+    return _issue_tokens(db, user)
+
+
+GUEST_DOMAIN = "guest.mata-ai.app"
+
+
+def is_guest_email(email: str | None) -> bool:
+    return bool(email) and email.endswith("@" + GUEST_DOMAIN)
+
+
+@app.post("/guest", response_model=TokenPair, status_code=201)
+async def guest(request: Request, db: AsyncSession = Depends(get_db)) -> TokenPair:
+    """Anonymous session: use MATA AI / NEXUS without signing up.
+
+    Creates a private guest user whose data lives behind the returned tokens (kept on the
+    visitor's device). Rate-limited per IP so it can't be used to mass-create accounts.
+    """
+    fwd = request.headers.get("x-forwarded-for", "")
+    ip = fwd.split(",")[0].strip() or (request.client.host if request.client else "unknown")
+    if not await rate_limit(f"guest-create:{ip}", settings.guest_sessions_per_min):
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Too many new sessions, try again in a minute")
+    user = User(
+        email=f"guest-{uuid.uuid4().hex}@{GUEST_DOMAIN}",
+        hashed_password=hash_password(secrets.token_urlsafe(24)),
+        full_name=None,
     )
     db.add(user)
     await db.flush()

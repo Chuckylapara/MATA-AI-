@@ -54,6 +54,36 @@ export async function refreshTokens(): Promise<boolean> {
   return true;
 }
 
+// ---- No-account use: a private guest session is created automatically (kept on this device).
+let guestInFlight: Promise<boolean> | null = null;
+
+export function isGuest(): boolean {
+  try { return localStorage.getItem("mata_guest") === "1"; } catch { return false; }
+}
+
+/** Make sure there is a session; creates an anonymous guest session if needed. */
+export async function ensureSession(): Promise<boolean> {
+  if (typeof window === "undefined") return false;
+  if (getToken()) return true;
+  if (!guestInFlight) {
+    guestInFlight = (async () => {
+      try {
+        const res = await fetch(`${apiBase()}/auth/guest`, { method: "POST" });
+        if (!res.ok) return false;
+        const tokens = await res.json();
+        setTokens(tokens.access_token, tokens.refresh_token);
+        try { localStorage.setItem("mata_guest", "1"); } catch { /* storage blocked */ }
+        return true;
+      } catch {
+        return false;
+      } finally {
+        guestInFlight = null;
+      }
+    })();
+  }
+  return guestInFlight;
+}
+
 function doFetch(path: string, opts: RequestInit, auth: boolean) {
   const headers: Record<string, string> = { "Content-Type": "application/json", ...(opts.headers as any) };
   const token = getToken();
@@ -62,9 +92,10 @@ function doFetch(path: string, opts: RequestInit, auth: boolean) {
 }
 
 async function request(path: string, opts: RequestInit = {}, auth = true) {
+  if (auth && !getToken()) await ensureSession();
   let res = await doFetch(path, opts, auth);
-  // Access token expired → refresh once and retry transparently.
-  if (res.status === 401 && auth && (await refreshTokens())) {
+  // Access token expired → refresh once (or start a fresh guest session) and retry transparently.
+  if (res.status === 401 && auth && ((await refreshTokens()) || (await ensureSession()))) {
     res = await doFetch(path, opts, auth);
   }
   if (!res.ok) {
@@ -185,6 +216,7 @@ export const api = {
 
 function saveAuth(tokens: any) {
   setTokens(tokens.access_token, tokens.refresh_token);
+  try { localStorage.removeItem("mata_guest"); } catch { /* storage blocked */ }
   return tokens;
 }
 

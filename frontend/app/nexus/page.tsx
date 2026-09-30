@@ -9,7 +9,7 @@ import type { AvatarState, ChatTurn, PendingAction } from "@/nexus/core/types";
 import { AVATAR_STATES } from "@/nexus/core/types";
 import { VoiceEngine, voiceSupport } from "@/nexus/voice/VoiceEngine";
 import type { VisionEngine, VisionStatus } from "@/nexus/vision/VisionEngine";
-import { api, apiBase, getToken, setApiBase } from "@/lib/api";
+import { api, apiBase, ensureSession, getToken, setApiBase } from "@/lib/api";
 import AutomationCenter from "@/nexus/ui/AutomationCenter";
 import CapabilityPanel from "@/nexus/ui/CapabilityPanel";
 import ConfirmDialog from "@/nexus/ui/ConfirmDialog";
@@ -103,7 +103,9 @@ export default function NexusPage() {
     setMode(m);
     const s = loadSettings();
     setSettings(s);
-    setAuthed(!!getToken());
+    // No account needed: start a private guest session automatically when there is no login.
+    if (getToken()) setAuthed(true);
+    else ensureSession().then((ok) => setAuthed(ok));
     setMicSupported(voiceSupport().mic);
     channel.current = "BroadcastChannel" in window ? new BroadcastChannel("nexus-display") : null;
 
@@ -539,7 +541,7 @@ function SignIn({ onDone }: { onDone: () => void }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [server, setServer] = useState("");
-  const [showServer, setShowServer] = useState(false);
+  const [showServer, setShowServer] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   useEffect(() => { setServer(apiBase()); }, []);
@@ -563,8 +565,19 @@ function SignIn({ onDone }: { onDone: () => void }) {
 
   return (
     <form onSubmit={submit} className="nx-panel px-5 py-5 w-full max-w-sm space-y-3">
-      <p className="nx-mono text-[10px] tracking-[0.3em] text-cyan-300">{mode === "login" ? "INICIA SESIÓN" : "CREA TU CUENTA"}</p>
-      <p className="text-xs text-slate-400">Tu cuenta de MATA mantiene privada tu memoria, tus permisos y tus tareas.</p>
+      <p className="nx-mono text-[10px] tracking-[0.3em] text-cyan-300">NO SE PUDO CONECTAR</p>
+      <p className="text-xs text-slate-400">NEXUS no necesita cuenta, pero no pudo conectar con el servidor. Revisa la dirección del servidor y pulsa “Continuar sin cuenta”. Si el servidor estaba dormido, espera un minuto.</p>
+      <button type="button" disabled={loading} className="nx-btn nx-btn-primary text-sm px-4 py-2 w-full"
+        onClick={async () => {
+          setError(null); setLoading(true);
+          setApiBase(server || null);
+          const ok = await ensureSession();
+          setLoading(false);
+          if (ok) onDone(); else setError("Sigue sin conectar con " + (server || apiBase()) + ".");
+        }}>
+        {loading ? "Conectando…" : "Continuar sin cuenta"}
+      </button>
+      <p className="nx-mono text-[10px] tracking-[0.2em] text-slate-500 pt-2">O ENTRA CON TU CUENTA</p>
       <input id="nx-email" className="nx-input" type="email" autoComplete="email" placeholder="correo@ejemplo.com"
         value={email} onChange={(e) => setEmail(e.target.value)} required aria-label="Correo" />
       <input id="nx-password" className="nx-input" type="password" autoComplete={mode === "login" ? "current-password" : "new-password"}
@@ -576,7 +589,7 @@ function SignIn({ onDone }: { onDone: () => void }) {
         </label>
       )}
       {error && <p role="alert" className="text-xs text-rose-300">{error}</p>}
-      <button type="submit" disabled={loading} className="nx-btn nx-btn-primary text-sm px-4 py-2 w-full">
+      <button type="submit" disabled={loading} className="nx-btn nx-btn-ghost text-sm px-4 py-2 w-full">
         {loading ? "Conectando…" : mode === "login" ? "Entrar" : "Crear cuenta"}
       </button>
       <div className="flex justify-between text-[11px] text-slate-400">

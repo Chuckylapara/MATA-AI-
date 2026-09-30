@@ -5,6 +5,7 @@ import Background from "@/components/Background";
 import WelcomeVoice from "@/components/WelcomeVoice";
 import ScrollReveal from "@/components/ScrollReveal";
 import PWARegister from "@/components/PWARegister";
+import GuestSession from "@/components/GuestSession";
 
 export const metadata: Metadata = {
   title: "MATA AI · Plataforma de Inteligencia Artificial",
@@ -35,6 +36,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <PWARegister />
+        <GuestSession />
         <Background />
         <WelcomeVoice />
         <ScrollReveal />

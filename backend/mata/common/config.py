@@ -96,6 +96,10 @@ class Settings(BaseSettings):
     def paypal_enabled(self) -> bool:
         return bool(self.paypal_client_id and self.paypal_secret)
 
+    # --- Guest (no-account) sessions ---
+    guest_sessions_per_min: int = 5          # new guest sessions per IP per minute
+    guest_daily_messages: int = 80           # NEXUS messages per guest per 24 h (protects API budget)
+
     # --- Default model ids ---
     chat_model: str = "claude-opus-4-8"
     code_model: str = "claude-opus-4-8"
