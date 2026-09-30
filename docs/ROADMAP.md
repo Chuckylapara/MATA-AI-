@@ -5,7 +5,7 @@ Legend: ✅ done & tested · 🟡 foundation built, more to do · ⏳ planned ·
 Rule for every phase: run tests → inspect errors → fix → re-test previous features → update
 docs → commit a stable milestone. Never move on with broken functionality.
 
-Verification at this milestone: 62 backend tests (pytest), 5 frontend unit tests, a Playwright
+Verification at this milestone: 63 backend tests (pytest), 5 frontend unit tests, a Playwright
 end-to-end test, TypeScript typecheck, and a production `next build` all pass.
 
 | Phase | Scope | Status |

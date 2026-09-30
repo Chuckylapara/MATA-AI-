@@ -150,6 +150,9 @@ class ToolExecutor:
 
         if len(json.dumps(args, default=str)) > MAX_TOOL_ARGS_CHARS:
             return ToolResult(False, error="Arguments too large", error_code="invalid_input")
+        # Models sometimes invent extra arguments; only declared parameters reach the handler.
+        declared = tool.input_schema.get("properties", {})
+        args = {k: v for k, v in args.items() if k in declared}
         errors = validate(tool.input_schema, args)
         if errors:
             return ToolResult(False, error="; ".join(errors), error_code="invalid_input")

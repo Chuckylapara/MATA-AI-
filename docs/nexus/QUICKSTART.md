@@ -11,7 +11,7 @@
 ./scripts/nexus.sh install     # venv + pip + npm
 ./scripts/nexus.sh configure   # creates .env (random JWT secret)
 ./scripts/nexus.sh start       # backend :8000 (all services) + frontend :3000
-./scripts/nexus.sh test        # 62 backend tests + typecheck + frontend unit tests
+./scripts/nexus.sh test        # backend tests + typecheck + frontend unit tests
 ./scripts/nexus.sh build       # production static build of the frontend
 ./scripts/nexus.sh e2e         # browser end-to-end smoke test (needs `start` running)
 ```

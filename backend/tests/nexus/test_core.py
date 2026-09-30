@@ -208,3 +208,17 @@ async def test_simulated_robot_records():
     await r.look(10, -5)
     await r.gesture("wave")
     assert [c["cmd"] for c in r.log] == ["look", "gesture"] and all(c["simulated"] for c in r.log)
+
+
+async def test_executor_drops_undeclared_args(user_id):
+    from mata.common.db import SessionLocal
+    from mata.nexus.embeddings import Embedder
+    from mata.nexus.memory import MemoryEngine
+    from mata.nexus.tools.base import ToolContext
+    from mata.nexus.tools.registry import executor
+
+    router = ModelRouter({"mock": DevMockProvider()})
+    async with SessionLocal() as db:
+        ctx = ToolContext(db=db, user_id=user_id, router=router, memory=MemoryEngine(db, user_id, Embedder(router)))
+        res = await executor.run(ctx, "calculator", {"expression": "2*(3+4)", "user_id": "someone-else"})
+    assert res.ok and res.data["result"] == 14
