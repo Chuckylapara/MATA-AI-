@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { OneEuro, OneEuroVec } from "../nexus/vision/oneEuro.ts";
 import { ARM_POINTS, GROUP, buildAvatar, fbm, mulberry32, torsoZ } from "../nexus/avatar/geometry.ts";
 import { STATE_PARAMS } from "../nexus/avatar/states.ts";
+import { dedupeRepeats } from "../nexus/voice/dedupe.ts";
 
 const STATES = ["IDLE", "LISTENING", "THINKING", "SEARCHING", "READING", "ANALYZING", "SPEAKING", "EXCITED", "CALM",
   "CONFUSED", "WARNING", "ERROR", "SUCCESS", "WORKING", "CREATING", "BROWSING"];
@@ -59,4 +60,11 @@ test("all 16 avatar states have complete, distinct parameters", () => {
   assert.ok(STATE_PARAMS.ERROR.tintAmt > 0.5 && STATE_PARAMS.WARNING.tintAmt > 0.3, "warning/error are visually distinct");
   assert.ok(STATE_PARAMS.SEARCHING.flow > STATE_PARAMS.IDLE.flow, "searching sends energy outward");
   assert.ok(STATE_PARAMS.THINKING.turb > STATE_PARAMS.IDLE.turb, "thinking is more active");
+});
+
+test("iOS repeated transcripts are collapsed", () => {
+  assert.equal(dedupeRepeats("Qué es lo que qué es lo que qué es lo qué"), "Qué es lo que");
+  assert.equal(dedupeRepeats("hola hola hola"), "hola");
+  assert.equal(dedupeRepeats("busca la película busca la película Dune"), "busca la película Dune");
+  assert.equal(dedupeRepeats("¿Qué tiempo hace hoy?"), "¿Qué tiempo hace hoy?");
 });

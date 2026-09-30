@@ -11,7 +11,7 @@ import re
 
 from mata.nexus.providers.base import ChatResult, ModelProvider, as_dicts
 
-LABEL = "[DEV MOCK — no AI provider configured]"
+LABEL = "[DEV MOCK — el servidor no tiene claves de IA]"
 
 # Minimal, transparent intent rules so tool plumbing can be exercised end-to-end.
 _SEARCH = re.compile(r"\b(busca|buscar|search|investiga|research|find|encuentra)\b\s*(.*)", re.I)
@@ -39,8 +39,8 @@ class DevMockProvider(ModelProvider):
         if last.startswith("TOOL RESULTS"):
             text = f"{LABEL} Tool results received. Summary unavailable without a real model:\n{last[12:600]}"
         else:
-            text = (f"{LABEL} I received: \"{last[:200]}\". Configure a model provider "
-                    "(Ollama locally, or NVIDIA / Groq / Gemini / Anthropic keys) for real answers.")
+            text = (f"{LABEL} Recibí: \"{last[:200]}\". Para respuestas reales, añade GROQ_API_KEY, "
+                    "GEMINI_API_KEY o NVIDIA_API_KEY en el servidor (Render → Environment) y reinícialo.")
         return ChatResult(text=text, provider=self.name, model="dev-mock")
 
     def _plan(self, text: str, system: str) -> dict:

@@ -30,7 +30,7 @@ await page.getByText(/dev mock/i).first().waitFor();
 // 3. Conversation streams and memory is extracted
 await page.getByLabel("Message NEXUS").fill("Hola, me llamo Erick y estoy creando una empresa");
 await page.keyboard.press("Enter");
-await page.getByText(/DEV MOCK — no AI provider configured/).first().waitFor({ timeout: 15000 });
+await page.getByText(/DEV MOCK/).first().waitFor({ timeout: 15000 });
 await page.getByRole("button", { name: /Memory/ }).first().click();
 await page.getByText("The user's name is Erick.", { exact: true }).waitFor({ timeout: 10000 });
 await page.getByText("The user is working on: una empresa", { exact: true }).waitFor();

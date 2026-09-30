@@ -110,7 +110,12 @@ async def root():
 async def healthz():
     from mata.common import db
 
+    from mata.nexus.providers import build_providers
+
+    # Provider NAMES only (never key values) so a missing key is easy to spot.
+    ai = [n for n in build_providers() if n != "mock"]
     return {"status": "ok", "mode": "devserver", "db": db.engine.url.get_backend_name(),
+            "ai_providers": ai or "none — add GROQ_API_KEY / GEMINI_API_KEY / NVIDIA_API_KEY",
             "db_fallback": db.DB_STATE["fallback"], "db_error": db.DB_STATE["error"], "mounts": list(_MOUNTS)}
 
 
