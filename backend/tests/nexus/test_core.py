@@ -315,3 +315,21 @@ def test_friendly_provider_errors():
     assert "no es válida" in friendly_provider_error(Exception("nvidia: HTTP 401: Unauthorized"))
     assert "límite" in friendly_provider_error(Exception("nvidia: HTTP 429: too many"))
     assert "conectar" in friendly_provider_error(Exception("nvidia: network error: timeout"))
+
+
+def test_byok_is_exclusive_to_caller_provider():
+    from mata.common.config import Settings
+    from mata.nexus.router import router_for_key, ModelRouter
+    import mata.nexus.router as R
+
+    # Server has Gemini + dev mock; caller brings an NVIDIA key.
+    R._byok_cache.clear()
+    R.set_router(ModelRouter(cfg=Settings(gemini_api_key="AIza" + "s" * 35, nexus_allow_dev_mock=True)))
+    try:
+        r = router_for_key("nvapi-" + "n" * 40)
+        names = {p.name for p in r.providers.values()}
+        assert names == {"nvidia"}, names          # only the caller's provider, no gemini, no mock
+        assert r.primary("reasoning").name == "nvidia"
+    finally:
+        R.set_router(None)
+        R._byok_cache.clear()

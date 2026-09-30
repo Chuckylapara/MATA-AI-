@@ -166,7 +166,12 @@ def router_for_key(key: str | None) -> ModelRouter:
     digest = hashlib.sha256(key.strip().encode()).hexdigest()
     if digest in _byok_cache:
         return _byok_cache[digest]
-    update = {_KEY_FIELD[name]: key.strip(), "nexus_reasoning_provider": name, "nexus_fast_provider": name}
+    # Build a config with ONLY the caller own provider key, so the router never mixes in the
+    # server other providers (a mismatched or out-of-quota one would mask the real result).
+    clear = {f: None for f in _KEY_FIELD.values()}
+    update = {**clear, _KEY_FIELD[name]: key.strip(), "nexus_allow_dev_mock": False, "ollama_base_url": None,
+              "nexus_reasoning_provider": name, "nexus_fast_provider": name,
+              "nexus_embed_provider": name if name in ("openai", "gemini", "ollama") else None}
     if name in _VISION_CAPABLE:
         update["nexus_vision_provider"] = name
     router = ModelRouter(cfg=settings.model_copy(update=update))

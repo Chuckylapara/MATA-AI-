@@ -35,8 +35,9 @@ def build_providers(cfg: Settings | None = None) -> dict[str, ModelProvider]:
             name="nvidia", base_url="https://integrate.api.nvidia.com/v1", api_key=cfg.nvidia_api_key,
             chat_model=cfg.nvidia_model, vision_model=cfg.nvidia_vision_model,
             # NVIDIA retires model ids over time; fall back to current catalogue models.
-            alt_models=["meta/llama-3.3-70b-instruct", "nvidia/llama-3.3-nemotron-super-49b-v1",
-                        "meta/llama-3.1-8b-instruct", "mistralai/mistral-small-24b-instruct"],
+            alt_models=["meta/llama-3.1-8b-instruct", "nvidia/llama-3.3-nemotron-super-49b-v1",
+                        "openai/gpt-oss-20b", "qwen/qwen2.5-7b-instruct", "microsoft/phi-3.5-mini-instruct",
+                        "meta/llama-3.1-70b-instruct"],
         )
     if cfg.groq_api_key:
         out["groq"] = OpenAICompatibleProvider(
