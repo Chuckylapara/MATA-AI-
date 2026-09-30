@@ -1,6 +1,8 @@
 """Async SQLAlchemy engine, session factory, and FastAPI dependency."""
 from __future__ import annotations
 
+import logging
+import os
 from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -61,11 +63,46 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
             raise
 
 
+log = logging.getLogger("mata.db")
+
+#: Live database status, shown by /healthz so a broken database is visible instead of silent 500s.
+DB_STATE: dict = {"backend": _db_url.split(":", 1)[0], "fallback": False, "error": None}
+
+
+async def _use_sqlite_fallback(reason: str) -> None:
+    """Switch every session to a local SQLite file when the configured database is unreachable.
+
+    Free hosted Postgres instances expire (Render deletes free databases after 30 days); without
+    this the whole API answers 500. The fallback keeps the site usable — data is stored on the
+    server's local disk, which free hosts wipe on redeploy, so point DATABASE_URL at a working
+    database to make it permanent. Disable with DB_FALLBACK_SQLITE=0.
+    """
+    global engine
+    from sqlalchemy.pool import StaticPool
+
+    path = os.getenv("DB_FALLBACK_PATH", "./mata_fallback.db")
+    fallback = create_async_engine(f"sqlite+aiosqlite:///{path}", echo=False,
+                                   connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    engine = fallback
+    SessionLocal.configure(bind=fallback)
+    DB_STATE.update(backend="sqlite", fallback=True, error=reason[:300])
+    log.error("Database unreachable (%s). Using local SQLite fallback at %s", reason[:200], path)
+
+
 async def init_db() -> None:
     """Create tables on startup (dev). Use Alembic migrations in production."""
     # Import models so they register on Base.metadata.
     from mata.common import models  # noqa: F401
     from mata.nexus import models as nexus_models  # noqa: F401
 
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        DB_STATE["error"] = None
+    except Exception as exc:  # noqa: BLE001 — any connection/auth/DNS failure
+        if _is_sqlite or DB_STATE["fallback"] or os.getenv("DB_FALLBACK_SQLITE", "1") != "1":
+            DB_STATE["error"] = str(exc)[:300]
+            raise
+        await _use_sqlite_fallback(f"{type(exc).__name__}: {exc}")
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
