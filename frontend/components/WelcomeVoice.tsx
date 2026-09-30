@@ -1,9 +1,16 @@
 "use client";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 // Speaks "Welcome to Mata AI" once per session. Browsers block speech until a user
 // gesture, so we try immediately and also on the first interaction as a fallback.
 export default function WelcomeVoice() {
+  const path = usePathname();
+  if (path?.startsWith("/nexus")) return null;
+  return <WelcomeVoiceInner />;
+}
+
+function WelcomeVoiceInner() {
   const [needsTap, setNeedsTap] = useState(false);
 
   useEffect(() => {
