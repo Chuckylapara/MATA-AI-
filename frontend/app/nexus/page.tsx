@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { NexusAvatar } from "@/nexus/avatar/NexusAvatar";
 import { STATE_PARAMS } from "@/nexus/avatar/states";
 import { aiKeyProvider, converse, getAiKey, nexus, setAiKey } from "@/nexus/core/api";
+import { directConverse } from "@/nexus/core/directAI";
 import { bus } from "@/nexus/core/bus";
 import type { AvatarState, ChatTurn, PendingAction } from "@/nexus/core/types";
 import { AVATAR_STATES } from "@/nexus/core/types";
@@ -223,7 +224,8 @@ export default function NexusPage() {
       setState(v?.micOn ? "LISTENING" : "IDLE");
       return;
     }
-    if (!authed) { flash("Sign in to talk with NEXUS."); return; }
+    const useDirect = !!aiKeyProvider(getAiKey());  // own key → talk to the AI directly, no server needed
+    if (!authed && !useDirect) { flash("Sign in to talk with NEXUS."); return; }
     stream.current?.abort();
     v?.interrupt("user");
     setTurns((t) => [...t, { id: uid(), role: "user", text, ts: Date.now() }]);
@@ -234,7 +236,7 @@ export default function NexusPage() {
     const assistantId = uid();
     const tools = new Set<string>();
 
-    const handle = converse(text, convId.current, (ev, d) => {
+    const handle = (useDirect ? directConverse : converse)(text, convId.current, (ev, d) => {
       switch (ev) {
         case "conversation": convId.current = d.conversation_id; break;
         case "state": if (!(d.state === "SPEAKING" && !settings.speak)) setState(d.state); break;
