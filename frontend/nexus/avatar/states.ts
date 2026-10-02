@@ -33,4 +33,13 @@ export const STATE_PARAMS: Record<AvatarState, StateParams> = {
   WORKING:   { speed: 1.0, turb: 0.8, pulse: 0.4, glow: 0.9, gold: 1.0, flow: 0.6, scatter: 0.1, tint: NONE, tintAmt: 0, label: "Working" },
   CREATING:  { speed: 1.2, turb: 1.0, pulse: 0.5, glow: 1.05, gold: 1.35, flow: 0.5, scatter: 0.3, tint: [1.0, 0.55, 0.85], tintAmt: 0.12, label: "Creating" },
   BROWSING:  { speed: 1.0, turb: 0.7, pulse: 0.35, glow: 0.9, gold: 0.95, flow: 0.9, scatter: 0.05, tint: [0.4, 0.9, 1.0], tintAmt: 0.15, label: "Browsing" },
+  NEUTRAL:   { speed: 0.5, turb: 0.5, pulse: 0.15, glow: 0.65, gold: 0.85, flow: 0.12, scatter: 0.0, tint: NONE, tintAmt: 0, label: "Neutral" },
+  HAPPY:     { speed: 1.0, turb: 0.6, pulse: 0.55, glow: 1.1, gold: 1.2, flow: 0.4, scatter: 0.25, tint: [0.5, 0.95, 1.0], tintAmt: 0.12, label: "Happy" },
+  CURIOUS:   { speed: 0.9, turb: 0.8, pulse: 0.4, glow: 0.9, gold: 1.05, flow: 0.3, scatter: 0.12, tint: [0.45, 0.9, 1.0], tintAmt: 0.14, label: "Curious" },
+  SURPRISED: { speed: 1.5, turb: 1.3, pulse: 0.9, glow: 1.2, gold: 1.2, flow: 0.7, scatter: 0.55, tint: [0.6, 0.95, 1.0], tintAmt: 0.15, label: "Surprised" },
+  SLEEPING:  { speed: 0.2, turb: 0.15, pulse: 0.06, glow: 0.4, gold: 0.5, flow: 0.0, scatter: 0.0, tint: [0.3, 0.5, 0.9], tintAmt: 0.1, label: "Sleeping" },
+  CAMERA_ACTIVE: { speed: 0.9, turb: 0.7, pulse: 0.4, glow: 0.95, gold: 1.0, flow: 0.4, scatter: 0.1, tint: [0.45, 0.9, 1.0], tintAmt: 0.14, label: "Looking" },
+  RECORDING: { speed: 0.9, turb: 0.7, pulse: 0.9, glow: 0.95, gold: 1.0, flow: 0.2, scatter: 0.08, tint: [1.0, 0.3, 0.3], tintAmt: 0.25, label: "Recording" },
+  BUYING:    { speed: 1.0, turb: 0.8, pulse: 0.5, glow: 1.0, gold: 1.35, flow: 0.6, scatter: 0.2, tint: NONE, tintAmt: 0, label: "Shopping" },
+  MESSAGING: { speed: 1.0, turb: 0.7, pulse: 0.45, glow: 0.95, gold: 1.0, flow: 0.7, scatter: 0.08, tint: [0.4, 0.9, 1.0], tintAmt: 0.12, label: "Messaging" },
 };

@@ -7,7 +7,8 @@ import { STATE_PARAMS } from "../nexus/avatar/states.ts";
 import { dedupeRepeats } from "../nexus/voice/dedupe.ts";
 
 const STATES = ["IDLE", "LISTENING", "THINKING", "SEARCHING", "READING", "ANALYZING", "SPEAKING", "EXCITED", "CALM",
-  "CONFUSED", "WARNING", "ERROR", "SUCCESS", "WORKING", "CREATING", "BROWSING"];
+  "CONFUSED", "WARNING", "ERROR", "SUCCESS", "WORKING", "CREATING", "BROWSING",
+  "NEUTRAL", "HAPPY", "CURIOUS", "SURPRISED", "SLEEPING", "CAMERA_ACTIVE", "RECORDING", "BUYING", "MESSAGING"];
 
 test("one-euro filter smooths jitter at rest and follows fast motion", () => {
   const f = new OneEuro(1.0, 0.05);
@@ -50,7 +51,7 @@ test("torso surface is inside the silhouette only", () => {
   assert.ok(n >= 0 && n <= 1);
 });
 
-test("all 16 avatar states have complete, distinct parameters", () => {
+test("all avatar states have complete parameters", () => {
   assert.deepEqual(Object.keys(STATE_PARAMS).sort(), [...STATES].sort());
   for (const s of STATES) {
     const p = (STATE_PARAMS as any)[s];

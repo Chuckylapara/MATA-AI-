@@ -5,7 +5,7 @@ import { bus } from "@/nexus/core/bus";
 import { Badge, Btn, ErrorLine, Panel, statusTone } from "@/nexus/ui/kit";
 
 export interface LiveMetrics {
-  fps: number; visionFps: number; latencyMs: number | null; lastChars: number; mic: boolean; camera: boolean;
+  fps: number; perf?: string; visionFps: number; latencyMs: number | null; lastChars: number; mic: boolean; camera: boolean;
   tracking: boolean; activeTools: string[]; state: string; errors: string[];
 }
 
@@ -37,7 +37,7 @@ export default function SystemDashboard({ onClose, live }: { onClose: () => void
       actions={<Btn small onClick={load}>Refresh</Btn>}>
       <ErrorLine error={error} />
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        {stat("Render FPS", live.fps)}
+        {stat("Render FPS", `${live.fps}${live.perf ? " · " + live.perf : ""}`)}
         {stat("Vision FPS", live.tracking ? live.visionFps : "off")}
         {stat("First token", live.latencyMs != null ? `${live.latencyMs} ms` : "—")}
         {stat("Last reply", `${live.lastChars} chars`)}

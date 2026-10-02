@@ -77,7 +77,7 @@ export default function NexusPage() {
   const [serverNotice, setServerNotice] = useState<string | null>(null);
   const [status, setStatus] = useState<any>(null);
   const [name, setName] = useState<string | null>(null);
-  const [live, setLive] = useState<LiveMetrics>({ fps: 0, visionFps: 0, latencyMs: null, lastChars: 0, mic: false,
+  const [live, setLive] = useState<LiveMetrics>({ fps: 0, perf: "ULTRA", visionFps: 0, latencyMs: null, lastChars: 0, mic: false,
     camera: false, tracking: false, activeTools: [], state: "IDLE", errors: [] });
 
   // ----------------------------------------------------------------- avatar state
@@ -155,7 +155,7 @@ export default function NexusPage() {
     voice.current = v;
 
     const offInt = bus.on("USER_INTERRUPTED", (d) => { nexus.clientEvent("USER_INTERRUPTED", d); });
-    const fpsTimer = setInterval(() => setLive((l) => ({ ...l, fps: avatar.current?.fps ?? 0 })), 1000);
+    const fpsTimer = setInterval(() => setLive((l) => ({ ...l, fps: avatar.current?.fps ?? 0, perf: avatar.current?.perfLevel })), 1000);
 
     return () => {
       dead = true;
