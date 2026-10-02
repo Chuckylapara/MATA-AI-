@@ -181,6 +181,15 @@ export class NexusAvatar {
   private disposed = false;
   fps = 0;
   private fpsAcc = { frames: 0, t: 0 };
+  // Automatic performance scaling: drop background particles / pixel ratio / bloom if FPS sags.
+  private bodyCount = 0;
+  private perfSteps = [1.0, 0.75, 0.5, 0.32];      // ULTRA, HIGH, MEDIUM, LOW (fraction of particles drawn)
+  private perfLabels = ["ULTRA", "HIGH", "MEDIUM", "LOW"];
+  private perfIdx = 0;
+  private perfTimer = 0;
+  private perfLowFrames = 0;
+  private perfHighFrames = 0;
+  perfLevel = "ULTRA";
 
   constructor(private container: HTMLElement, private quality: Quality = "high") {
     const q = QUALITY[quality];
@@ -218,8 +227,12 @@ export class NexusAvatar {
     g.setAttribute("aRand", new THREE.BufferAttribute(buf.rand, 1));
     g.setAttribute("aSize", new THREE.BufferAttribute(buf.size, 1));
     g.boundingSphere = new THREE.Sphere(new THREE.Vector3(0, 0.8, -1.5), 10);
+    this.bodyCount = buf.count;
     this.body = new THREE.Points(g, this.material);
     this.scene.add(this.body);
+    this.perfIdx = quality === "high" ? 0 : quality === "medium" ? 1 : 2;
+    this.perfLevel = this.perfLabels[this.perfIdx];
+    g.setDrawRange(0, Math.floor(buf.count * this.perfSteps[this.perfIdx]));
 
     // Arms: positions recomputed on the CPU each frame from the rig.
     this.armPos = new Float32Array(ARM_POINTS * 2 * 3);
@@ -303,6 +316,7 @@ export class NexusAvatar {
     const t = this.clock.elapsedTime;
     this.fpsAcc.frames++; this.fpsAcc.t += dt;
     if (this.fpsAcc.t > 0.5) { this.fps = Math.round(this.fpsAcc.frames / this.fpsAcc.t); this.fpsAcc = { frames: 0, t: 0 }; }
+    this.autoScale(dt);
 
     // state interpolation
     const target = STATE_PARAMS[this.state];
@@ -369,6 +383,32 @@ export class NexusAvatar {
     if (this.bloom) this.bloom.strength = 0.35 + p.glow * 0.4 + this.audio * 0.2;
     if (this.composer) this.composer.render(); else this.renderer.render(this.scene, this.camera);
   };
+
+  /** Watch FPS and step quality down (or back up) so the avatar stays smooth on any device. */
+  private autoScale(dt: number) {
+    this.perfTimer += dt;
+    if (this.fps > 0 && this.fps < 42) this.perfLowFrames++; else this.perfLowFrames = 0;
+    if (this.fps >= 57) this.perfHighFrames++; else this.perfHighFrames = 0;
+    if (this.perfTimer < 2) return;
+    this.perfTimer = 0;
+    let idx = this.perfIdx;
+    if (this.perfLowFrames >= 3 && idx < this.perfSteps.length - 1) idx++;        // sustained low → coarser
+    else if (this.perfHighFrames >= 8 && idx > 0) idx--;                          // long smooth spell → finer
+    if (idx === this.perfIdx) return;
+    this.perfIdx = idx;
+    this.perfLevel = this.perfLabels[idx];
+    this.perfLowFrames = this.perfHighFrames = 0;
+    // Draw fewer particles from the END of the buffer first — that trims background dust and the
+    // environment, keeping the head, core, neck and torso (the identity) intact.
+    this.body.geometry.setDrawRange(0, Math.floor(this.bodyCount * this.perfSteps[idx]));
+    const pr = idx <= 1 ? Math.min(window.devicePixelRatio || 1, 2) : 1;
+    if (this.renderer.getPixelRatio() !== pr) {
+      this.renderer.setPixelRatio(pr);
+      this.composer?.setPixelRatio?.(pr);
+      this.material.uniforms.uPixelRatio.value = this.renderer.getPixelRatio();
+    }
+    if (this.bloom) this.bloom.enabled = idx <= 2;      // drop bloom only at LOW
+  }
 
   /** Natural idle / conversational motion when no camera tracking is active. */
   private proceduralRig(t: number): AvatarRig {
